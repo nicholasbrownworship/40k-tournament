@@ -109,6 +109,38 @@
     .field textarea{ min-height:72px; resize:vertical; }
     .field input:focus, .field select:focus, .field textarea:focus{ border-color: var(--line2); }
 
+    /* Improve select/dropdown readability on dark backgrounds */
+    .field select,
+    select {
+      font-family: inherit;            /* use same font as body */
+      color: var(--text);              /* ensure readable text */
+      background: rgba(0,0,0,.12);    /* match inputs */
+      border: 1px solid var(--line);
+      padding: 10px 36px 10px 10px;   /* room for arrow */
+      border-radius: 12px;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    /* Option styling (limited support on some platforms) */
+    .field select option,
+    select option {
+      background: var(--panel);
+      color: var(--text);
+    }
+
+    /* Hide native IE/Edge dropdown arrow */
+    select::-ms-expand { display: none; }
+
+    /* Add a subtle custom arrow using CSS so the select still looks native */
+    .field select {
+      background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+                        linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position: calc(100% - 18px) calc(1em + 2px), calc(100% - 12px) calc(1em + 2px);
+      background-size: 6px 6px, 6px 6px;
+      background-repeat: no-repeat;
+    }
+
     .notice{
       border:1px dashed rgba(138,209,255,.45);
       background: rgba(138,209,255,.08);
@@ -252,7 +284,7 @@
     <div class="topbar">
       <div class="brand">
         <h1><span class="sig">40K Tournament Ops</span> <span class="muted">— Smart Format Builder + Runner</span></h1>
-        <p class="sub">Landing screen picks player count + event length → auto-builds the most efficient format (Swiss / Swiss+Cut / Round Robin). Or skip it and run a fully custom event. Everything is localStorage + export/import.</p>
+        <p class="sub">Landing screen picks player count + event length → auto-builds the most efficient format (Swiss / Swiss+Cut / Round Robin). Or skip it and run a fully custom event. Everything[...]... 
       </div>
 
       <div class="inline noPrint">
@@ -463,7 +495,7 @@
             <div class="hr"></div>
 
             <div class="notice">
-              <strong>Pairing logic:</strong> Swiss pairs by points then tiebreaks, best-effort avoids repeats. Round Robin uses a fixed rotation schedule (generated once). Cut is a single-elim bracket seeded from standings.
+              <strong>Pairing logic:</strong> Swiss pairs by points then tiebreaks, best-effort avoids repeats. Round Robin uses a fixed rotation schedule (generated once). Cut is a single-elim bracke[...] 
             </div>
 
             <div class="inline noPrint">
@@ -677,8 +709,8 @@
       const n = parseInt(v, 10);
       return Number.isFinite(n) ? n : d;
     };
-    const escapeHtml = (str) => String(str ?? "").replace(/[&<>"']/g, m => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    const escapeHtml = (str) => String(str ?? "").replace(/[&<>\"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
     }[m]));
     const nowISODate = () => {
       const d = new Date();
@@ -856,8 +888,8 @@
     function buildNewEventFromRecommendation(rec){
       const name = ($("#lEventName").value || "").trim() || "Store Night 40K";
       const date = nowISODate();
-      const tie = $("#lTieBreak").value;
-      const preset = $("#lScoringPreset").value;
+      const tie = ($("#lTieBreak").value);
+      const preset = ($("#lScoringPreset").value);
 
       state = defaultState();
       state.meta.name = name;
@@ -887,7 +919,7 @@
       state.meta.date = nowISODate();
       state.meta.format = "custom";
       // scoring presets still apply if user chose them
-      const preset = $("#lScoringPreset").value;
+      const preset = ($("#lScoringPreset").value);
       const scoring = applyPresetScoring(preset);
       if(scoring) state.meta.scoring = scoring;
       state.meta.useVP = ($("#lTieBreak").value === "vp");
@@ -931,7 +963,7 @@
           if(res.outcome === "A"){
             a.points += winPts; a.w++;
             if(m.bId && stats[m.bId]){ stats[m.bId].points += lossPts; stats[m.bId].l++; }
-          }else if(res.outcome === "B"){
+          }else if(res.outcome === "B"){ 
             a.points += lossPts; a.l++;
             if(m.bId && stats[m.bId]){ stats[m.bId].points += winPts; stats[m.bId].w++; }
           }else if(res.outcome === "D"){
@@ -973,7 +1005,7 @@
       for(const rnd of state.rounds){
         for(const m of rnd.pairings){
           if(m?.aId && m?.bId){
-            set.add([m.aId, m.bId].sort().join("|"));
+            set.add([m.aId, m.bId].sort().join("|")).
           }
         }
       }
@@ -999,835 +1031,8 @@
         for(let i = available.length - 1; i >= 0; i--){
           if(!byeHistory.has(available[i])) { byePlayer = available.splice(i,1)[0]; break; }
         }
-        if(!byePlayer) byePlayer = available.pop();
-      }
-
-      const pairings = [];
-      let table = 1;
-
-      for(let i=0;i<available.length;i+=2){
-        let a = available[i];
-        let b = available[i+1];
-        if(!b) break;
-
-        let key = [a,b].sort().join("|");
-        if(played.has(key)){
-          for(let j=i+3;j<available.length;j+=2){
-            const b2 = available[j];
-            const k2 = [a,b2].sort().join("|");
-            if(!played.has(k2)){
-              available[i+1] = b2;
-              available[j] = b;
-              b = b2;
-              break;
-            }
-          }
-        }
-
-        pairings.push({ table: table++, aId:a, bId:b, result:{ outcome:"NONE", aVP:0, bVP:0 } });
-      }
-
-      if(byePlayer){
-        pairings.push({ table: table++, aId: byePlayer, bId: null, result:{ outcome:"BYE", aVP:100, bVP:0 } });
-      }
-      return pairings;
+      } 
     }
-
-    // Round Robin schedule (circle method). If odd, adds a BYE ghost.
-    function generateRoundRobinSchedule(playerIds){
-      const ids = [...playerIds];
-      const odd = (ids.length % 2 === 1);
-      if(odd) ids.push(null); // ghost bye
-
-      const n = ids.length;
-      const rounds = n - 1;
-      const half = n / 2;
-
-      // fixed first, rotate the rest
-      let arr = ids.slice();
-      const schedule = [];
-      for(let r=1;r<=rounds;r++){
-        const pairs = [];
-        for(let i=0;i<half;i++){
-          const a = arr[i];
-          const b = arr[n-1-i];
-          // alternate home/away by round
-          const flip = (r % 2 === 0);
-          const A = flip ? b : a;
-          const B = flip ? a : b;
-          pairs.push([A, B]);
-        }
-        schedule.push(pairs);
-
-        // rotate: keep arr[0] fixed, rotate the rest
-        const fixed = arr[0];
-        const rest = arr.slice(1);
-        rest.unshift(rest.pop());
-        arr = [fixed, ...rest];
-      }
-      return schedule; // [ roundIndex => [ [aId,bId], ... ] ]
-    }
-
-    function isCutRoundLabel(label){
-      return String(label || "").toLowerCase().includes("cut");
-    }
-
-    function nextRoundNumber(){
-      return state.rounds.length ? Math.max(...state.rounds.map(r=>r.number)) + 1 : 1;
-    }
-
-    function createRoundLabel(n){
-      // if cut enabled and swiss rounds complete, next created is cut round 1, 2, ...
-      if(state.meta.format === "swiss_cut" && state.meta.cutSize > 0){
-        const swissRounds = clampInt(state.meta.roundsPlanned, 3);
-        const swissCreated = state.rounds.filter(r => !isCutRoundLabel(r.label)).length;
-        if(swissCreated >= swissRounds){
-          const cutCreated = state.rounds.filter(r => isCutRoundLabel(r.label)).length;
-          return `Cut Round ${cutCreated + 1}`;
-        }
-      }
-      return `Round ${n}`;
-    }
-
-    function generateCutBracketPairings(cutSize){
-      const seeds = standingsList().slice(0, cutSize).map(s => s.id);
-      const pairings = [];
-      let table = 1;
-
-      // classic seeding: 1vN, 2v(N-1), ...
-      for(let i=0;i<Math.floor(seeds.length/2);i++){
-        const a = seeds[i];
-        const b = seeds[seeds.length-1-i];
-        pairings.push({ table: table++, aId:a, bId:b, result:{ outcome:"NONE", aVP:0, bVP:0 } });
-      }
-      return pairings;
-    }
-
-    /*******************
-     * UI / RENDER
-     *******************/
-    function ensureRoundSelect(){
-      const sel = $("#roundSelect");
-      if(!sel) return;
-      sel.innerHTML = "";
-      if(state.rounds.length === 0){
-        const opt = document.createElement("option");
-        opt.value = "0";
-        opt.textContent = "No rounds yet";
-        sel.appendChild(opt);
-        sel.disabled = true;
-      }else{
-        sel.disabled = false;
-        for(const r of state.rounds){
-          const opt = document.createElement("option");
-          opt.value = String(r.number);
-          opt.textContent = `${r.label}${r.locked ? " (locked)" : ""}`;
-          sel.appendChild(opt);
-        }
-        const val = state.activeRound || state.rounds[state.rounds.length-1].number;
-        sel.value = String(val);
-      }
-    }
-
-    function refreshKPIs(){
-      $("#kpiPlayers").textContent = state.players.length;
-      $("#kpiRounds").textContent = state.rounds.length;
-      $("#kpiActiveRound").textContent = state.activeRound ? `R${state.activeRound}` : "—";
-      let c = 0;
-      for(const r of state.rounds){
-        for(const m of r.pairings){
-          if(m?.result?.outcome && m.result.outcome !== "NONE") c++;
-        }
-      }
-      $("#kpiMatches").textContent = c;
-    }
-
-    function refreshEventFields(){
-      $("#eventName").value = state.meta.name || "";
-      $("#eventDate").value = state.meta.date || nowISODate();
-      $("#formatType").value = state.meta.format || "custom";
-      $("#roundCount").value = clampInt(state.meta.roundsPlanned, 3);
-      $("#cutSize").value = String(clampInt(state.meta.cutSize, 0));
-      $("#scoringWin").value = clampInt(state.meta.scoring?.win, 3);
-      $("#scoringDraw").value = clampInt(state.meta.scoring?.draw, 1);
-      $("#scoringLoss").value = clampInt(state.meta.scoring?.loss, 0);
-      $("#useVP").value = state.meta.useVP ? "yes" : "no";
-      $("#eventNotes").value = state.meta.notes || "";
-      $("#cutNotice").style.display = (state.meta.format === "swiss_cut" && clampInt(state.meta.cutSize,0)>0) ? "" : "none";
-    }
-
-    function refreshPlayersTable(){
-      const tbody = $("#playersTable tbody");
-      tbody.innerHTML = "";
-      state.players.forEach((p, idx)=>{
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td class="muted">${idx+1}</td>
-          <td><strong>${escapeHtml(p.name)}</strong></td>
-          <td>${escapeHtml(p.faction || "—")}</td>
-          <td class="noPrint">
-            <div class="rowActions">
-              <button class="mini warn" data-act="edit" data-id="${p.id}">Edit</button>
-              <button class="mini bad" data-act="remove" data-id="${p.id}">Remove</button>
-            </div>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
-
-      tbody.addEventListener("click", (e)=>{
-        const btn = e.target.closest("button[data-act]");
-        if(!btn) return;
-        const act = btn.getAttribute("data-act");
-        const id = btn.getAttribute("data-id");
-        if(!id) return;
-
-        if(act === "remove"){
-          const p = getPlayer(id);
-          if(!p) return;
-          if(!confirm(`Remove "${p.name}"? This also removes their matches from existing rounds.`)) return;
-          snapAndSave();
-          state.players = state.players.filter(x => x.id !== id);
-          for(const r of state.rounds){
-            r.pairings = r.pairings.filter(m => m.aId !== id && m.bId !== id);
-          }
-          refreshAll();
-        }else if(act === "edit"){
-          openPlayerEditor(id);
-        }
-      }, { once:true });
-    }
-
-    function getRound(n){ return state.rounds.find(r => r.number === n) || null; }
-
-    function refreshRoundBadge(n){
-      const b = $("#roundBadge");
-      const r = getRound(n);
-      b.textContent = r ? `${r.label}${r.locked ? " (locked)" : ""}` : "Round: —";
-    }
-
-    function renderResultLabel(res){
-      const out = res?.outcome || "NONE";
-      if(out === "NONE") return `<span class="badge">Unreported</span>`;
-      if(out === "BYE") return `<span class="badge warn">Bye (Win)</span>`;
-      if(out === "D") return `<span class="badge warn">Draw</span>`;
-      if(out === "A") return `<span class="badge good">A Wins</span>`;
-      if(out === "B") return `<span class="badge bad">B Wins</span>`;
-      return `<span class="badge">—</span>`;
-    }
-
-    function refreshPairingsTable(){
-      const sel = $("#roundSelect");
-      const n = clampInt(sel?.value, state.activeRound || 0);
-      const rnd = getRound(n);
-      refreshRoundBadge(n);
-      const tbody = $("#pairingsTable tbody");
-      tbody.innerHTML = "";
-
-      if(!rnd){
-        tbody.innerHTML = `<tr><td colspan="7" class="muted">No round selected.</td></tr>`;
-        return;
-      }
-
-      const locked = !!rnd.locked;
-
-      for(const m of rnd.pairings){
-        const a = getPlayer(m.aId);
-        const b = m.bId ? getPlayer(m.bId) : null;
-        const res = m.result || { outcome:"NONE", aVP:0, bVP:0 };
-
-        tbody.insertAdjacentHTML("beforeend", `
-          <tr>
-            <td class="muted">#${m.table}</td>
-            <td><strong>${a ? escapeHtml(a.name) : "[missing]"}</strong><div class="muter">${a ? escapeHtml(a.faction||"") : ""}</div></td>
-            <td>${b ? `<strong>${escapeHtml(b.name)}</strong><div class="muter">${escapeHtml(b.faction||"")}</div>` : `<span class="badge warn">BYE</span>`}</td>
-            <td>${renderResultLabel(res)}</td>
-            <td class="noPrint">${locked ? `<span class="muted">${clampInt(res.aVP,0)}</span>` : `<input data-vp="a" data-table="${m.table}" type="number" min="0" step="1" value="${clampInt(res.aVP,0)}" style="width:90px;">`}</td>
-            <td class="noPrint">${b ? (locked ? `<span class="muted">${clampInt(res.bVP,0)}</span>` : `<input data-vp="b" data-table="${m.table}" type="number" min="0" step="1" value="${clampInt(res.bVP,0)}" style="width:90px;">`) : `<span class="muter">—</span>`}</td>
-            <td class="noPrint">
-              <div class="rowActions">
-                <button class="mini good" data-act="result" data-table="${m.table}" ${locked ? "disabled" : ""}>Result</button>
-                <button class="mini warn" data-act="swap" data-table="${m.table}" ${locked ? "disabled" : ""}>Swap</button>
-                <button class="mini bad" data-act="drop" data-table="${m.table}" ${locked ? "disabled" : ""}>Drop</button>
-              </div>
-            </td>
-          </tr>
-        `);
-      }
-
-      // click handlers
-      tbody.addEventListener("click", (e)=>{
-        const btn = e.target.closest("button[data-act]");
-        if(!btn) return;
-        const act = btn.getAttribute("data-act");
-        const table = clampInt(btn.getAttribute("data-table"), 0);
-        if(!table) return;
-        const idx = rnd.pairings.findIndex(x => x.table === table);
-        if(idx < 0) return;
-
-        if(act === "result") openResultEditor(rnd.number, table);
-        if(act === "swap") openSwapEditor(rnd.number, table);
-        if(act === "drop"){
-          if(!confirm("Drop this pairing?")) return;
-          snapAndSave();
-          rnd.pairings.splice(idx,1);
-          rnd.pairings.forEach((m,i)=> m.table = i+1);
-          refreshAll();
-        }
-      }, { once:true });
-
-      // VP input handlers
-      $$("input[data-vp]", tbody).forEach(inp=>{
-        inp.addEventListener("input", ()=>{
-          const which = inp.getAttribute("data-vp");
-          const table = clampInt(inp.getAttribute("data-table"), 0);
-          const match = rnd.pairings.find(x => x.table === table);
-          if(!match) return;
-          snapAndSave();
-          match.result = match.result || { outcome:"NONE", aVP:0, bVP:0 };
-          if(which === "a") match.result.aVP = clampInt(inp.value, 0);
-          if(which === "b") match.result.bVP = clampInt(inp.value, 0);
-          refreshAll();
-        });
-      });
-    }
-
-    function refreshStandings(){
-      const tbody = $("#standingsTable tbody");
-      tbody.innerHTML = "";
-
-      if(state.players.length === 0){
-        tbody.innerHTML = `<tr><td colspan="8" class="muted">No players yet.</td></tr>`;
-        return;
-      }
-
-      const list = standingsList();
-      for(let i=0;i<list.length;i++){
-        const s = list[i];
-        const oppNames = Array.from(s.opps || []).map(id => getPlayer(id)?.name).filter(Boolean).join(", ");
-        tbody.insertAdjacentHTML("beforeend", `
-          <tr>
-            <td><strong>${i+1}</strong></td>
-            <td><strong>${escapeHtml(s.name)}</strong></td>
-            <td>${escapeHtml(s.faction || "—")}</td>
-            <td><strong>${s.points}</strong></td>
-            <td class="muted">${s.w}–${s.d}–${s.l}</td>
-            <td>${state.meta.useVP ? s.vp : `<span class="muter">—</span>`}</td>
-            <td class="muted">${s.sos}</td>
-            <td class="muted" style="max-width:380px;">${escapeHtml(oppNames || "—")}</td>
-          </tr>
-        `);
-      }
-    }
-
-    function refreshAll(){
-      refreshEventFields();
-      ensureRoundSelect();
-      refreshKPIs();
-      refreshPlayersTable();
-      refreshPairingsTable();
-      refreshStandings();
-    }
-
-    /*******************
-     * MODAL HELPERS
-     *******************/
-    const modalBack = $("#modalBack");
-    const modalBody = $("#modalBody");
-    const modalTitle = $("#modalTitle");
-
-    function openModal(title, html){
-      modalTitle.textContent = title;
-      modalBody.innerHTML = html;
-      modalBack.classList.add("open");
-      modalBack.setAttribute("aria-hidden","false");
-      setTimeout(()=>{
-        const first = modalBody.querySelector("input,select,textarea,button");
-        if(first) first.focus();
-      }, 50);
-    }
-    function closeModal(){
-      modalBack.classList.remove("open");
-      modalBack.setAttribute("aria-hidden","true");
-      modalBody.innerHTML = "";
-    }
-    $("#btnModalClose").addEventListener("click", closeModal);
-    $("#btnModalCancel").addEventListener("click", closeModal);
-    modalBack.addEventListener("click", (e)=>{ if(e.target === modalBack) closeModal(); });
-
-    function openPlayerEditor(playerId){
-      const p = getPlayer(playerId);
-      if(!p) return;
-      openModal(`Edit Player — ${p.name}`, `
-        <div class="fieldRow">
-          <div class="field"><label>Name</label><input id="editName" value="${escapeHtml(p.name)}" /></div>
-          <div class="field"><label>Faction</label><input id="editFaction" value="${escapeHtml(p.faction||"")}" /></div>
-        </div>
-      `);
-      $("#btnModalSave").onclick = ()=>{
-        snapAndSave();
-        p.name = ($("#editName").value || "").trim() || p.name;
-        p.faction = ($("#editFaction").value || "").trim();
-        closeModal();
-        refreshAll();
-      };
-    }
-
-    function openResultEditor(roundNumber, table){
-      const rnd = getRound(roundNumber);
-      if(!rnd) return;
-      const match = rnd.pairings.find(m => m.table === table);
-      if(!match) return;
-
-      const a = getPlayer(match.aId);
-      const b = match.bId ? getPlayer(match.bId) : null;
-      const res = match.result || { outcome:"NONE", aVP:0, bVP:0 };
-      const hasOpp = !!match.bId;
-
-      const options = hasOpp
-        ? `<option value="NONE">Unreported</option><option value="A">A Wins</option><option value="B">B Wins</option><option value="D">Draw</option>`
-        : `<option value="BYE">Bye (A Wins)</option><option value="NONE">Unreported</option>`;
-
-      openModal(`${rnd.label} — Table #${table} Result`, `
-        <div class="notice">
-          <div><strong>A:</strong> ${escapeHtml(a?.name || "[missing]")} <span class="muted">(${escapeHtml(a?.faction||"")})</span></div>
-          <div><strong>B:</strong> ${b ? `${escapeHtml(b.name)} <span class="muted">(${escapeHtml(b.faction||"")})</span>` : `<span class="badge warn">BYE</span>`}</div>
-        </div>
-
-        <div class="fieldRow">
-          <div class="field">
-            <label>Outcome</label>
-            <select id="resOutcome">${options}</select>
-          </div>
-          <div class="field">
-            <label>Quick Set</label>
-            <select id="quickSet">
-              <option value="">—</option>
-              <option value="A_100_60">A wins 100–60</option>
-              <option value="B_60_100">B wins 60–100</option>
-              <option value="D_80_80">Draw 80–80</option>
-              <option value="BYE_100_0">Bye 100–0</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="hr"></div>
-
-        <div class="fieldRow">
-          <div class="field"><label>VP — A</label><input id="resA" type="number" min="0" step="1" value="${clampInt(res.aVP,0)}" /></div>
-          <div class="field"><label>VP — B</label><input id="resB" type="number" min="0" step="1" value="${clampInt(res.bVP,0)}" ${hasOpp ? "" : "disabled"} /></div>
-        </div>
-      `);
-
-      $("#resOutcome").value = res.outcome || "NONE";
-      $("#quickSet").addEventListener("change", (e)=>{
-        const v = e.target.value;
-        if(!v) return;
-        const [o,aVP,bVP] = v.split("_");
-        $("#resOutcome").value = o;
-        $("#resA").value = aVP;
-        if(hasOpp) $("#resB").value = bVP;
-      });
-
-      $("#btnModalSave").onclick = ()=>{
-        snapAndSave();
-        match.result = match.result || { outcome:"NONE", aVP:0, bVP:0 };
-        match.result.outcome = $("#resOutcome").value;
-        match.result.aVP = clampInt($("#resA").value, 0);
-        match.result.bVP = hasOpp ? clampInt($("#resB").value, 0) : 0;
-        closeModal();
-        refreshAll();
-      };
-    }
-
-    function openSwapEditor(roundNumber, table){
-      const rnd = getRound(roundNumber);
-      if(!rnd) return;
-      const match = rnd.pairings.find(m => m.table === table);
-      if(!match) return;
-
-      const options = rnd.pairings
-        .filter(m => m.table !== table && m.bId)
-        .map(m => {
-          const b = getPlayer(m.bId);
-          return `<option value="${m.table}">${m.label || ""}Table #${m.table} — swap with ${escapeHtml(b?.name || "[missing]")}</option>`;
-        }).join("");
-
-      if(!options){
-        alert("No eligible pairings to swap with.");
-        return;
-      }
-
-      openModal(`Swap Opponents — ${rnd.label}`, `
-        <div class="notice">Swaps the <strong>B player</strong> of this table with another table’s B player. Clears both results.</div>
-        <div class="field"><label>Choose another table</label><select id="swapTarget">${options}</select></div>
-      `);
-
-      $("#btnModalSave").onclick = ()=>{
-        const targetTable = clampInt($("#swapTarget").value, 0);
-        const other = rnd.pairings.find(m => m.table === targetTable);
-        if(!other) return;
-        snapAndSave();
-        const tmp = match.bId;
-        match.bId = other.bId;
-        other.bId = tmp;
-        match.result = { outcome:"NONE", aVP:0, bVP:0 };
-        other.result = { outcome:"NONE", aVP:0, bVP:0 };
-        closeModal();
-        refreshAll();
-      };
-    }
-
-    /*******************
-     * WIRING: LANDING
-     *******************/
-    function updateRecommendationPreview(){
-      const players = clampInt($("#lPlayers").value, 6);
-      const hours = clampInt($("#lHours").value, 4);
-      const roundMin = clampInt($("#lRoundMin").value, 180);
-      const breakMin = clampInt($("#lBreakMin").value, 10);
-
-      const rec = recommendFormat(players, hours, roundMin, breakMin);
-
-      const box = $("#recommendBox");
-      box.style.display = "";
-      const cutText = rec.format === "swiss_cut" ? ` + Top ${rec.cutSize} Final` : "";
-      box.innerHTML = `
-        <div><strong>Recommendation:</strong> ${labelForFormat(rec.format)} — ${rec.roundsTotal} rounds${cutText}</div>
-        <div class="muted">Max rounds that fit your time: <strong>${rec.maxRounds}</strong></div>
-        <div class="muted">Why: ${escapeHtml(rec.reason)}</div>
-        <div class="muted">Note: ${escapeHtml(rec.notes)}</div>
-      `;
-      return rec;
-    }
-
-    function labelForFormat(fmt){
-      if(fmt === "round_robin") return "Round Robin";
-      if(fmt === "swiss_cut") return "Swiss + Cut";
-      if(fmt === "swiss") return "Swiss";
-      return "Custom";
-    }
-
-    ["lPlayers","lHours","lRoundMin","lBreakMin","lScoringPreset","lTieBreak","lEventName"].forEach(id=>{
-      const el = $("#"+id);
-      if(!el) return;
-      el.addEventListener("input", updateRecommendationPreview);
-      el.addEventListener("change", updateRecommendationPreview);
-    });
-
-    $("#btnRecommend").addEventListener("click", ()=>{
-      const rec = updateRecommendationPreview();
-      buildNewEventFromRecommendation(rec);
-    });
-
-    $("#btnCustomBuild").addEventListener("click", ()=>{
-      buildNewCustomEvent();
-    });
-
-    $("#btnLoadExisting").addEventListener("click", ()=>{
-      const loaded = load();
-      if(!loaded){
-        alert("No saved event found yet.");
-        return;
-      }
-      state = loaded;
-      showApp();
-    });
-
-    /*******************
-     * WIRING: APP
-     *******************/
-    // Tabs
-    $$(".tab").forEach(t=>{
-      t.addEventListener("click", ()=>{
-        $$(".tab").forEach(x => x.classList.remove("active"));
-        t.classList.add("active");
-        const key = t.getAttribute("data-tab");
-        $$(".section").forEach(s => s.classList.remove("active"));
-        $(`#tab-${key}`).classList.add("active");
-      });
-    });
-
-    // Event fields
-    $("#eventName").addEventListener("input", ()=>{
-      state.meta.name = $("#eventName").value.trim();
-      markDirty();
-    });
-    $("#eventDate").addEventListener("change", ()=>{
-      state.meta.date = $("#eventDate").value || nowISODate();
-      snapAndSave(); refreshAll();
-    });
-    $("#formatType").addEventListener("change", ()=>{
-      state.meta.format = $("#formatType").value;
-      snapAndSave(); refreshAll();
-    });
-    $("#roundCount").addEventListener("input", ()=>{
-      state.meta.roundsPlanned = clampInt($("#roundCount").value, 3);
-      snapAndSave(); refreshAll();
-    });
-    $("#cutSize").addEventListener("change", ()=>{
-      state.meta.cutSize = clampInt($("#cutSize").value, 0);
-      // if cut enabled, switch format to swiss_cut automatically
-      if(state.meta.cutSize > 0) state.meta.format = "swiss_cut";
-      snapAndSave(); refreshAll();
-    });
-    $("#scoringWin").addEventListener("input", ()=>{
-      state.meta.scoring.win = clampInt($("#scoringWin").value, 3);
-      snapAndSave(); refreshAll();
-    });
-    $("#scoringDraw").addEventListener("input", ()=>{
-      state.meta.scoring.draw = clampInt($("#scoringDraw").value, 1);
-      snapAndSave(); refreshAll();
-    });
-    $("#scoringLoss").addEventListener("input", ()=>{
-      state.meta.scoring.loss = clampInt($("#scoringLoss").value, 0);
-      snapAndSave(); refreshAll();
-    });
-    $("#useVP").addEventListener("change", ()=>{
-      state.meta.useVP = $("#useVP").value === "yes";
-      snapAndSave(); refreshAll();
-    });
-    $("#eventNotes").addEventListener("input", ()=>{
-      state.meta.notes = $("#eventNotes").value;
-      markDirty();
-    });
-
-    // Players
-    $("#btnAddPlayer").addEventListener("click", ()=>{
-      const name = ($("#newPlayerName").value || "").trim();
-      const faction = ($("#newPlayerFaction").value || "").trim();
-      if(!name){ alert("Player name required."); return; }
-      snapAndSave();
-      state.players.push({ id: uid(), name, faction });
-      $("#newPlayerName").value = "";
-      $("#newPlayerFaction").value = "";
-      refreshAll();
-    });
-
-    $("#btnSortAlpha").addEventListener("click", ()=>{
-      snapAndSave();
-      state.players.sort((a,b)=> a.name.localeCompare(b.name));
-      refreshAll();
-    });
-    $("#btnSortScore").addEventListener("click", ()=>{
-      snapAndSave();
-      const rank = standingsList().map(s => s.id);
-      const map = new Map(rank.map((id, i)=> [id, i]));
-      state.players.sort((a,b)=> (map.get(a.id) ?? 9999) - (map.get(b.id) ?? 9999));
-      refreshAll();
-    });
-
-    // Rounds
-    $("#btnNextRound").addEventListener("click", ()=>{
-      if(state.players.length < 2){ alert("Add at least 2 players first."); return; }
-
-      const n = nextRoundNumber();
-      const label = createRoundLabel(n);
-
-      // sanity: warn if exceeding planned swiss rounds (not counting cut rounds)
-      if(!isCutRoundLabel(label) && n > clampInt(state.meta.roundsPlanned,3)){
-        if(!confirm(`Planned rounds = ${state.meta.roundsPlanned}. Create ${label} anyway?`)) return;
-      }
-
-      snapAndSave();
-      state.rounds.push({ number: n, label, locked:false, pairings:[] });
-      state.activeRound = n;
-      refreshAll();
-      $$(".tab").find(t => t.getAttribute("data-tab")==="pairings")?.click();
-    });
-
-    $("#roundSelect").addEventListener("change", ()=>{
-      const n = clampInt($("#roundSelect").value, 0);
-      if(!n) return;
-      state.activeRound = n;
-      snapAndSave();
-      refreshAll();
-    });
-
-    $("#btnGeneratePairings").addEventListener("click", ()=>{
-      const n = clampInt($("#roundSelect").value, state.activeRound || 0);
-      const rnd = getRound(n);
-      if(!rnd){ alert("No round selected."); return; }
-      if(rnd.locked){ alert("Round is locked."); return; }
-      if(rnd.pairings.length && !confirm("Overwrite existing pairings for this round?")) return;
-
-      snapAndSave();
-
-      // CUT ROUND?
-      if(isCutRoundLabel(rnd.label) && state.meta.format === "swiss_cut" && clampInt(state.meta.cutSize,0) > 0){
-        rnd.pairings = generateCutBracketPairings(clampInt(state.meta.cutSize,0));
-        refreshAll();
-        return;
-      }
-
-      // ROUND ROBIN?
-      if(state.meta.format === "round_robin"){
-        // generate RR schedule once and then assign per round
-        const ids = state.players.map(p=>p.id);
-        const schedule = generateRoundRobinSchedule(ids);
-        const roundIndex = Math.max(1, n) - 1;
-        if(roundIndex >= schedule.length){
-          alert(`Round Robin schedule only has ${schedule.length} rounds for ${ids.length} players.`);
-          return;
-        }
-        const pairs = schedule[roundIndex];
-        let table = 1;
-        rnd.pairings = pairs.map(([aId,bId])=>{
-          if(aId === null || bId === null){
-            const real = aId ?? bId;
-            return { table: table++, aId: real, bId: null, result:{ outcome:"BYE", aVP:100, bVP:0 } };
-          }
-          // alternate A/B assignment as given
-          return { table: table++, aId, bId, result:{ outcome:"NONE", aVP:0, bVP:0 } };
-        });
-        refreshAll();
-        return;
-      }
-
-      // SWISS (default)
-      rnd.pairings = generateSwissPairings();
-      refreshAll();
-    });
-
-    $("#btnLockRound").addEventListener("click", ()=>{
-      const n = clampInt($("#roundSelect").value, state.activeRound || 0);
-      const rnd = getRound(n);
-      if(!rnd) return;
-      snapAndSave();
-      rnd.locked = !rnd.locked;
-      refreshAll();
-    });
-
-    // Standings tools
-    $("#btnRecalc").addEventListener("click", ()=> refreshAll());
-    $("#btnPrintStandings").addEventListener("click", ()=>{
-      $$(".tab").find(t => t.getAttribute("data-tab")==="standings")?.click();
-      setTimeout(()=> window.print(), 50);
-    });
-
-    // Demo seeding
-    $("#btnSeedDemo").addEventListener("click", ()=>{
-      if(state.players.length && !confirm("Add demo players alongside existing players?")) return;
-      snapAndSave();
-      const demo = [
-        ["Nick","Blood Angels"],["Ava","Necrons"],["Miles","Orks"],["Jordan","T'au Empire"],
-        ["Sam","Adeptus Custodes"],["Taylor","Tyranids"],["Riley","Chaos Space Marines"],
-        ["Morgan","Astra Militarum"],["Casey","Aeldari"],["Parker","Space Marines"]
-      ];
-      demo.forEach(([n,f])=> state.players.push({ id:uid(), name:n, faction:f }));
-      refreshAll();
-    });
-
-    // Copy TSV
-    async function copyText(text){
-      try{ await navigator.clipboard.writeText(text); }
-      catch{
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        ta.remove();
-      }
-    }
-    $("#btnCopyStandings").addEventListener("click", async ()=>{
-      const list = standingsList();
-      const rows = [
-        ["Rank","Player","Faction","Pts","W","D","L","VP","SoS"].join("\t"),
-        ...list.map((s,i)=> [i+1, s.name, s.faction||"", s.points, s.w, s.d, s.l, (state.meta.useVP?s.vp:""), s.sos].join("\t"))
-      ];
-      await copyText(rows.join("\n"));
-      alert("Standings copied (TSV).");
-    });
-    $("#btnCopyPairings").addEventListener("click", async ()=>{
-      const n = clampInt($("#roundSelect").value, state.activeRound || 0);
-      const rnd = getRound(n);
-      if(!rnd){ alert("No round selected."); return; }
-      const rows = [
-        ["RoundLabel","Table","PlayerA","PlayerB","Outcome","VPA","VPB"].join("\t"),
-        ...rnd.pairings.map(m=>{
-          const a = getPlayer(m.aId)?.name || "";
-          const b = m.bId ? (getPlayer(m.bId)?.name || "") : "BYE";
-          const r = m.result || { outcome:"NONE", aVP:0, bVP:0 };
-          return [rnd.label, m.table, a, b, r.outcome, clampInt(r.aVP,0), clampInt(r.bVP,0)].join("\t");
-        })
-      ];
-      await copyText(rows.join("\n"));
-      alert("Pairings copied (TSV).");
-    });
-
-    // Undo
-    $("#btnUndo").addEventListener("click", ()=>{
-      const raw = localStorage.getItem(SNAPSHOT_KEY);
-      if(!raw){ alert("No undo snapshot available."); return; }
-      try{
-        const prev = JSON.parse(raw);
-        if(!confirm("Undo last change?")) return;
-        state = prev;
-        save(false);
-        refreshAll();
-      }catch{ alert("Undo failed (snapshot corrupted)."); }
-    });
-
-    // Print / Export / Import / Wipe / Home
-    $("#btnPrint").addEventListener("click", ()=> window.print());
-    $("#btnExport").addEventListener("click", ()=>{
-      const blob = new Blob([JSON.stringify(state, null, 2)], { type:"application/json" });
-      const a = document.createElement("a");
-      const safeName = (state.meta.name || "tournament").replace(/[^\w\-]+/g,"_");
-      a.href = URL.createObjectURL(blob);
-      a.download = `${safeName}_${state.meta.date || nowISODate()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(a.href);
-    });
-    $("#fileImport").addEventListener("change", async (e)=>{
-      const file = e.target.files?.[0];
-      if(!file) return;
-      const text = await file.text();
-      try{
-        const data = JSON.parse(text);
-        if(!data || typeof data !== "object") throw new Error("Bad JSON");
-        if(!confirm("Import will overwrite the current event in this browser. Continue?")) return;
-        localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(state));
-        state = data;
-        save(false);
-        showApp();
-      }catch{
-        alert("Import failed: invalid JSON.");
-      }finally{
-        e.target.value = "";
-      }
-    });
-    $("#btnWipe").addEventListener("click", ()=>{
-      if(!confirm("Wipe everything? This clears the local event in this browser.")) return;
-      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(state));
-      state = defaultState();
-      save(false);
-      showLanding();
-      updateRecommendationPreview();
-    });
-    $("#btnGoHome").addEventListener("click", ()=>{
-      // keep state saved, just go home
-      save(false);
-      showLanding();
-      updateRecommendationPreview();
-    });
-
-    /*******************
-     * INIT
-     *******************/
-    function init(){
-      // landing defaults
-      $("#lEventName").value = state?.meta?.name || "";
-      updateRecommendationPreview();
-
-      // if we have an existing saved event with players/rounds, default to landing (safer),
-      // but allow "Open Last Saved Event".
-      showLanding();
-    }
-    init();
   </script>
 </body>
 </html>
