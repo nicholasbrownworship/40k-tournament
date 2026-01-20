@@ -1,6 +1,11 @@
 // app.js
 import { defaultState, loadState, saveState, migrateState, STORAGE_KEY } from "./state.js";
-import { nextRound, generatePairingsForRound, lockRound } from "./tournament.js";
+import {
+  nextRound,
+  generatePairingsForRound,
+  lockRound,
+  setMatchResult
+} from "./tournament.js";
 import { renderAll } from "./render.js";
 
 let state = loadState();
@@ -24,7 +29,7 @@ function showApp() {
 /* ---------------- Refresh ---------------- */
 
 function refresh() {
-  // Keep title synced
+  // keep title synced
   const title = document.getElementById("eventTitle");
   if (title) title.textContent = state.meta?.name || state.name || "Event";
 
@@ -32,7 +37,7 @@ function refresh() {
   renderAll(state);
 }
 
-/* ---------------- Topbar: Home / Export / Import / Wipe ---------------- */
+/* ---------------- Topbar actions ---------------- */
 
 const btnGoHome = document.getElementById("btnGoHome");
 const btnExport = document.getElementById("btnExport");
@@ -51,13 +56,15 @@ if (btnExport) {
 
     const a = document.createElement("a");
     const stamp = new Date().toISOString().slice(0, 10);
-    const name = (safe.meta?.name || safe.name || "40k-event").trim().replace(/[^\w\-]+/g, "_");
+    const name = (safe.meta?.name || safe.name || "40k-event")
+      .trim()
+      .replace(/[^\w\-]+/g, "_");
+
     a.href = url;
     a.download = `${name}_${stamp}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();
-
     URL.revokeObjectURL(url);
   };
 }
@@ -72,8 +79,11 @@ if (fileImport) {
       const parsed = JSON.parse(text);
       state = migrateState(parsed);
 
-      // If the imported state has anything in it, go to app view
-      const hasData = (state.players?.length || 0) > 0 || (state.rounds?.length || 0) > 0 || !!(state.meta?.name);
+      const hasData =
+        (state.players?.length || 0) > 0 ||
+        (state.rounds?.length || 0) > 0 ||
+        !!(state.meta?.name || state.name);
+
       if (hasData) showApp();
       else showLanding();
 
@@ -82,7 +92,6 @@ if (fileImport) {
       alert("Import failed: that file wasn’t valid JSON for this app.");
       console.error(err);
     } finally {
-      // allow importing same file again
       fileImport.value = "";
     }
   });
@@ -94,20 +103,24 @@ if (btnWipe) {
     if (!ok) return;
 
     localStorage.removeItem(STORAGE_KEY);
-
     state = defaultState();
     saveState(state);
     showLanding();
   };
 }
 
-/* ---------------- Landing Actions ---------------- */
+/* ---------------- Landing actions ---------------- */
 
 document.getElementById("btnRecommend").onclick = () => {
   const name = document.getElementById("lEventName").value || "40K Event";
   state.name = name;
   state.meta.name = name;
+
+  // initialize defaults
   state.meta.format = "swiss";
+  state.meta.useVP = true;
+  state.meta.scoring = state.meta.scoring || { win: 3, draw: 1, loss: 0 };
+
   showApp();
 };
 
@@ -115,15 +128,32 @@ document.getElementById("btnCustomBuild").onclick = () => {
   const name = (document.getElementById("lEventName").value || "").trim() || "Custom 40K Event";
   state.name = name;
   state.meta.name = name;
+
   state.meta.format = "custom";
+  state.meta.useVP = true;
+  state.meta.scoring = state.meta.scoring || { win: 3, draw: 1, loss: 0 };
+
   showApp();
 };
+
+/* ---------------- Tabs ---------------- */
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".tabBody").forEach(b => b.classList.remove("active"));
+
+    btn.classList.add("active");
+    document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+  };
+});
 
 /* ---------------- Players ---------------- */
 
 document.getElementById("btnAddPlayer").onclick = () => {
   const newPlayerName = document.getElementById("newPlayerName");
   const newPlayerFaction = document.getElementById("newPlayerFaction");
+
   const n = (newPlayerName.value || "").trim();
   if (!n) return;
 
@@ -154,6 +184,22 @@ document.getElementById("btnGeneratePairings").onclick = () => {
 
 document.getElementById("btnLockRound").onclick = () => {
   if (!state.activeRoundId) return;
+
+  const round = state.rounds.find(r => r.id === state.activeRoundId);
+  if (!round) return;
+
+  // basic guard: don't lock if any non-bye match still has NONE
+  const unfinished = (round.pairings || []).some(m => {
+    if (m.bId === null) return false; // bye is auto-complete
+    const o = (m.result?.outcome || "NONE").toUpperCase();
+    return o === "NONE";
+  });
+
+  if (unfinished) {
+    const ok = confirm("Some matches are still marked as NONE. Lock anyway?");
+    if (!ok) return;
+  }
+
   lockRound(state, state.activeRoundId, true);
   refresh();
 };
@@ -163,17 +209,40 @@ document.getElementById("roundSelect").onchange = (e) => {
   refresh();
 };
 
-/* ---------------- Tabs ---------------- */
+/* ---------------- Save Results (score entry) ---------------- */
 
-document.querySelectorAll(".tab").forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-    document.querySelectorAll(".tabBody").forEach(b => b.classList.remove("active"));
+const btnSaveResults = document.getElementById("btnSaveResults");
+if (btnSaveResults) {
+  btnSaveResults.onclick = () => {
+    if (!state.activeRoundId) return;
 
-    btn.classList.add("active");
-    document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+    const round = state.rounds.find(r => r.id === state.activeRoundId);
+    if (!round) return;
+
+    if (round.locked) {
+      alert("That round is locked. Unlocking is not implemented yet.");
+      return;
+    }
+
+    const rows = Array.from(document.querySelectorAll("#pairings .pairingRow"));
+    for (const row of rows) {
+      const matchId = row.dataset.matchId;
+      if (!matchId) continue;
+
+      const outcomeSel = row.querySelector('[data-field="outcome"]');
+      const aVPInput = row.querySelector('[data-field="aVP"]');
+      const bVPInput = row.querySelector('[data-field="bVP"]');
+
+      const outcome = outcomeSel ? outcomeSel.value : "NONE";
+      const aVP = aVPInput ? parseInt(aVPInput.value || "0", 10) : 0;
+      const bVP = bVPInput ? parseInt(bVPInput.value || "0", 10) : 0;
+
+      setMatchResult(state, state.activeRoundId, matchId, outcome, aVP, bVP);
+    }
+
+    refresh();
   };
-});
+}
 
 /* ---------------- Boot ---------------- */
 
