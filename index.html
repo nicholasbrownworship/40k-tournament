@@ -8,55 +8,129 @@
 </head>
 <body>
   <div class="wrap">
+    <!-- Simple top header (no extra buttons yet; everything here is wired) -->
     <header class="topbar">
-      <h1>40K Tournament Ops</h1>
-      <div class="actions">
-        <button id="btnGoHome">Home</button>
-        <button id="btnPrint">Print</button>
-        <button id="btnExport">Export</button>
-        <input type="file" id="fileImport" hidden />
-        <button id="btnWipe">Wipe</button>
+      <div class="brand">
+        <h1>40K Tournament Ops</h1>
+        <p class="sub">One-page runner: players → rounds → pairings → standings.</p>
       </div>
     </header>
 
-    <!-- LANDING -->
+    <!-- LANDING VIEW -->
     <section id="viewLanding">
-      <h2>Build Event</h2>
-      <label>Event Name <input id="lEventName" /></label>
-      <label>Players <input id="lPlayers" type="number" value="6" /></label>
-      <label>Hours <input id="lHours" type="number" value="4" /></label>
-      <button id="btnRecommend">Recommend & Build</button>
-      <button id="btnCustomBuild">Custom Event</button>
+      <div class="card">
+        <h2>Build Your Event</h2>
+
+        <div class="field">
+          <label for="lEventName">Event Name</label>
+          <input id="lEventName" placeholder="e.g., Store Night RTT — Bastior" />
+        </div>
+
+        <div class="fieldRow">
+          <div class="field">
+            <label for="lPlayers">Players (expected)</label>
+            <input id="lPlayers" type="number" min="2" step="1" value="6" />
+          </div>
+          <div class="field">
+            <label for="lHours">Event Length (hours)</label>
+            <input id="lHours" type="number" min="1" step="1" value="4" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" id="btnRecommend" type="button">Recommend &amp; Build</button>
+          <button class="btn" id="btnCustomBuild" type="button">Start Custom Event</button>
+        </div>
+
+        <p class="muted">
+          (For now, “Recommend” just builds a Swiss event. We’ll add full recommendation logic after UI is stable.)
+        </p>
+      </div>
     </section>
 
-    <!-- APP -->
+    <!-- APP VIEW -->
     <section id="viewApp" hidden>
-      <h2 id="eventTitle"></h2>
+      <div class="card">
+        <div class="cardHeader">
+          <h2 id="eventTitle">Event</h2>
+          <div class="mutedSmall">Local-only • autosaves</div>
+        </div>
 
-      <nav class="tabs">
-        <button data-tab="players" class="tab active">Players</button>
-        <button data-tab="pairings" class="tab">Pairings</button>
-        <button data-tab="standings" class="tab">Standings</button>
-      </nav>
+        <!-- Tabs -->
+        <nav class="tabs" aria-label="Tournament sections">
+          <button class="tab active" data-tab="players" type="button">Players</button>
+          <button class="tab" data-tab="pairings" type="button">Pairings</button>
+          <button class="tab" data-tab="standings" type="button">Standings</button>
+        </nav>
 
-      <div class="tabBody active" id="tab-players">
-        <input id="newPlayerName" placeholder="Player name" />
-        <input id="newPlayerFaction" placeholder="Faction" />
-        <button id="btnAddPlayer">Add</button>
-        <ul id="playersList"></ul>
-      </div>
+        <!-- PLAYERS TAB -->
+        <section class="tabBody active" id="tab-players">
+          <div class="notice">
+            Add players first. Then create a round in the Pairings tab.
+          </div>
 
-      <div class="tabBody" id="tab-pairings">
-        <button id="btnNextRound">Create Round</button>
-        <div id="pairings"></div>
-      </div>
+          <div class="fieldRow">
+            <div class="field">
+              <label for="newPlayerName">Player Name</label>
+              <input id="newPlayerName" placeholder="e.g., Nick" />
+            </div>
+            <div class="field">
+              <label for="newPlayerFaction">Faction</label>
+              <input id="newPlayerFaction" placeholder="e.g., Blood Angels" />
+            </div>
+          </div>
 
-      <div class="tabBody" id="tab-standings">
-        <ol id="standings"></ol>
+          <div class="actions">
+            <button class="btn primary" id="btnAddPlayer" type="button">Add Player</button>
+          </div>
+
+          <div class="hr"></div>
+
+          <h3 class="sectionTitle">Players</h3>
+          <ul id="playersList" class="list"></ul>
+        </section>
+
+        <!-- PAIRINGS TAB -->
+        <section class="tabBody" id="tab-pairings">
+          <div class="notice">
+            Create a round, generate pairings, then lock it when ready.
+          </div>
+
+          <div class="pairingControls">
+            <div class="left">
+              <span id="roundBadge" class="badge">—</span>
+              <select id="roundSelect" class="select" aria-label="Round select"></select>
+            </div>
+            <div class="right">
+              <button class="btn primary" id="btnNextRound" type="button">Create Round</button>
+              <button class="btn" id="btnGeneratePairings" type="button">Generate Pairings</button>
+              <button class="btn" id="btnLockRound" type="button">Lock Round</button>
+            </div>
+          </div>
+
+          <div class="hr"></div>
+
+          <h3 class="sectionTitle">Pairings</h3>
+          <div id="pairings" class="pairingsBox"></div>
+
+          <p class="muted">
+            Results entry is next (Step 3). Right now you’ll see pairings + current outcome status.
+          </p>
+        </section>
+
+        <!-- STANDINGS TAB -->
+        <section class="tabBody" id="tab-standings">
+          <div class="notice">
+            Standings update from logged results. Currently shows points, record, VP and SoS.
+          </div>
+
+          <h3 class="sectionTitle">Standings</h3>
+          <ol id="standings" class="list"></ol>
+        </section>
       </div>
     </section>
   </div>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
