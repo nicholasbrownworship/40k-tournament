@@ -8,24 +8,26 @@
 </head>
 <body>
   <div class="wrap">
-    <!-- TOP BAR -->
+
+    <!-- This banner is how we KNOW app.js is running -->
+    <div id="bootBanner" class="notice">
+      Loading app…
+    </div>
+
     <header class="topbar">
       <div class="brand">
         <h1>40K Tournament Ops</h1>
-        <p class="sub">Local-first runner: build → pair → score → standings. Export/import supported.</p>
+        <p class="sub">Local-first runner: recommend → build → pair → score → standings.</p>
       </div>
 
       <div class="topActions" aria-label="Top actions">
-        <button class="btn" id="btnGoHome" type="button" title="Back to landing">Home</button>
+        <button class="btn" id="btnGoHome" type="button">Home</button>
+        <button class="btn" id="btnExport" type="button">Export</button>
 
-        <button class="btn" id="btnExport" type="button" title="Download event JSON">Export</button>
-
-        <label class="btn" for="fileImport" title="Import event JSON">
-          Import
-        </label>
+        <label class="btn" for="fileImport">Import</label>
         <input id="fileImport" type="file" accept="application/json" />
 
-        <button class="btn danger" id="btnWipe" type="button" title="Delete local saved data">Wipe</button>
+        <button class="btn danger" id="btnWipe" type="button">Wipe</button>
       </div>
     </header>
 
@@ -50,14 +52,51 @@
           </div>
         </div>
 
+        <div class="fieldRow">
+          <div class="field">
+            <label for="lRoundMin">Minutes per round</label>
+            <input id="lRoundMin" type="number" min="45" step="5" value="180" />
+          </div>
+          <div class="field">
+            <label for="lBreakMin">Break minutes per round</label>
+            <input id="lBreakMin" type="number" min="0" step="5" value="10" />
+          </div>
+        </div>
+
+        <div class="fieldRow">
+          <div class="field">
+            <label for="lScoringPreset">Scoring preset</label>
+            <select id="lScoringPreset">
+              <option value="3-1-0" selected>Win=3 / Draw=1 / Loss=0</option>
+              <option value="2-1-0">Win=2 / Draw=1 / Loss=0</option>
+              <option value="custom">Custom (set inside event)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="lTieBreak">Tiebreak</label>
+            <select id="lTieBreak">
+              <option value="vp" selected>VP then SoS</option>
+              <option value="sos">SoS only (no VP)</option>
+            </select>
+          </div>
+        </div>
+
         <div class="actions">
-          <button class="btn primary" id="btnRecommend" type="button">Recommend &amp; Build</button>
+          <button class="btn primary" id="btnRecommend" type="button">Recommend</button>
           <button class="btn" id="btnCustomBuild" type="button">Start Custom Event</button>
         </div>
 
-        <p class="muted">
-          Note: Recommend currently initializes a Swiss event. (We can add full recommendation logic later.)
-        </p>
+        <div id="recommendBox" class="notice" hidden>
+          <h3 class="sectionTitle" style="margin-top:0;">Recommendation</h3>
+          <div id="recommendText"></div>
+
+          <div class="hr"></div>
+
+          <div class="actions">
+            <button class="btn primary" id="btnBuildRecommended" type="button">Build This Event</button>
+            <button class="btn" id="btnClearRecommendation" type="button">Change Inputs</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -66,21 +105,17 @@
       <div class="card">
         <div class="cardHeader">
           <h2 id="eventTitle">Event</h2>
-          <div class="mutedSmall" id="saveHint">Autosaves locally</div>
+          <div class="mutedSmall">Autosaves locally</div>
         </div>
 
-        <!-- Tabs -->
         <nav class="tabs" aria-label="Tournament sections">
           <button class="tab active" data-tab="players" type="button">Players</button>
           <button class="tab" data-tab="pairings" type="button">Pairings</button>
           <button class="tab" data-tab="standings" type="button">Standings</button>
         </nav>
 
-        <!-- PLAYERS TAB -->
         <section class="tabBody active" id="tab-players">
-          <div class="notice">
-            Add players first. Then go to Pairings to create Round 1.
-          </div>
+          <div class="notice">Add players first. Then Pairings → Create Round → Generate Pairings.</div>
 
           <div class="fieldRow">
             <div class="field">
@@ -98,23 +133,17 @@
           </div>
 
           <div class="hr"></div>
-
-          <h3 class="sectionTitle">Players</h3>
           <ul id="playersList" class="list"></ul>
         </section>
 
-        <!-- PAIRINGS TAB -->
         <section class="tabBody" id="tab-pairings">
-          <div class="notice">
-            Create a round, generate pairings, then enter results (Outcome + VP) and Save Results.
-          </div>
+          <div class="notice">Create round → generate pairings → enter scores → save → lock.</div>
 
           <div class="pairingControls">
             <div class="left">
               <span id="roundBadge" class="badge">—</span>
-              <select id="roundSelect" class="select" aria-label="Round select"></select>
+              <select id="roundSelect" class="select"></select>
             </div>
-
             <div class="right">
               <button class="btn primary" id="btnNextRound" type="button">Create Round</button>
               <button class="btn" id="btnGeneratePairings" type="button">Generate Pairings</button>
@@ -123,28 +152,16 @@
           </div>
 
           <div class="hr"></div>
-
-          <h3 class="sectionTitle">Pairings &amp; Scores</h3>
           <div id="pairings" class="pairingsBox"></div>
 
           <div class="hr"></div>
-
           <div class="actions">
             <button class="btn primary" id="btnSaveResults" type="button">Save Results</button>
           </div>
-
-          <p class="muted">
-            Locked rounds can’t be edited. (Unlock is not implemented yet.)
-          </p>
         </section>
 
-        <!-- STANDINGS TAB -->
         <section class="tabBody" id="tab-standings">
-          <div class="notice">
-            Standings: Points → (optional) VP → SoS → Name.
-          </div>
-
-          <h3 class="sectionTitle">Standings</h3>
+          <div class="notice">Standings update from logged results.</div>
           <ol id="standings" class="list"></ol>
         </section>
       </div>
