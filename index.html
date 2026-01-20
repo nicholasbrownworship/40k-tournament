@@ -1005,7 +1005,7 @@
       for(const rnd of state.rounds){
         for(const m of rnd.pairings){
           if(m?.aId && m?.bId){
-            set.add([m.aId, m.bId].sort().join("|")).
+            set.add([m.aId, m.bId].sort().join("|"));
           }
         }
       }
