@@ -8,11 +8,24 @@
 </head>
 <body>
   <div class="wrap">
-    <!-- Simple top header (no extra buttons yet; everything here is wired) -->
+    <!-- Topbar with Export/Import/Wipe -->
     <header class="topbar">
       <div class="brand">
         <h1>40K Tournament Ops</h1>
         <p class="sub">One-page runner: players → rounds → pairings → standings.</p>
+      </div>
+
+      <div class="topActions">
+        <button class="btn" id="btnGoHome" type="button" title="Back to landing">Home</button>
+
+        <button class="btn" id="btnExport" type="button" title="Download event JSON">Export</button>
+
+        <label class="btn" for="fileImport" title="Import event JSON">
+          Import
+        </label>
+        <input id="fileImport" type="file" accept="application/json" />
+
+        <button class="btn danger" id="btnWipe" type="button" title="Delete local saved data">Wipe</button>
       </div>
     </header>
 
@@ -43,7 +56,7 @@
         </div>
 
         <p class="muted">
-          (For now, “Recommend” just builds a Swiss event. We’ll add full recommendation logic after UI is stable.)
+          (For now, “Recommend” builds a Swiss event. We’ll add full recommendation logic after UI is stable.)
         </p>
       </div>
     </section>
@@ -114,7 +127,7 @@
           <div id="pairings" class="pairingsBox"></div>
 
           <p class="muted">
-            Results entry is next (Step 3). Right now you’ll see pairings + current outcome status.
+            Results entry is next. Right now you’ll see pairings + current outcome status.
           </p>
         </section>
 
