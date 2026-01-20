@@ -1,0 +1,1627 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>40K Tournament Ops — Local Tournament Runner</title>
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --panel:#121826;
+      --panel2:#0e1522;
+      --line:#263047;
+      --line2:#384a70;
+      --text:#e8eef6;
+      --muted:rgba(232,238,246,.72);
+      --muter:rgba(232,238,246,.52);
+      --good:#2bd4a6;
+      --warn:#ffcc66;
+      --bad:#ff6b6b;
+      --accent:#8ad1ff;
+      --accent2:#c8ff8a;
+      --shadow: 0 14px 40px rgba(0,0,0,.35);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    *{ box-sizing:border-box; }
+    body{ margin:0; background: radial-gradient(1200px 800px at 10% -10%, rgba(138,209,255,.10), transparent 55%),
+                             radial-gradient(1000px 700px at 110% 10%, rgba(200,255,138,.08), transparent 55%),
+                             var(--bg);
+          color:var(--text); }
+    a{ color:inherit; }
+    .wrap{ max-width: 1200px; margin:0 auto; padding:18px; }
+    .topbar{
+      display:flex; gap:12px; align-items:flex-start; justify-content:space-between;
+      margin-bottom:14px;
+    }
+    .brand{
+      display:flex; flex-direction:column; gap:6px;
+    }
+    .brand h1{
+      margin:0; font-size:18px; letter-spacing:.3px;
+      display:flex; align-items:center; gap:10px;
+    }
+    .brand h1 .sig{
+      font-weight:900;
+      padding:6px 10px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      box-shadow: var(--shadow);
+    }
+    .brand .sub{ margin:0; color:var(--muted); font-size:12px; line-height:1.35; max-width:720px; }
+    .rightControls{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+    .pill{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+      border-radius:999px;
+      padding:8px 10px;
+      display:flex; gap:8px; align-items:center;
+      box-shadow: var(--shadow);
+    }
+    .pill label{ font-size:12px; color:var(--muted); }
+    .pill input, .pill select{
+      background:transparent; color:var(--text);
+      border:1px solid transparent;
+      outline:none;
+      font-size:12px;
+      padding:6px 8px;
+      border-radius:10px;
+      min-width: 160px;
+    }
+    .pill input:focus, .pill select:focus{
+      border-color: var(--line2);
+      background: rgba(255,255,255,.03);
+    }
+    .btn{
+      cursor:pointer;
+      border:1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.02));
+      color:var(--text);
+      padding:9px 10px;
+      border-radius:12px;
+      font-weight:700;
+      font-size:12px;
+      box-shadow: var(--shadow);
+      user-select:none;
+      display:inline-flex; align-items:center; gap:8px;
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btn.primary{
+      border-color: rgba(138,209,255,.45);
+      background: linear-gradient(180deg, rgba(138,209,255,.16), rgba(255,255,255,.02));
+    }
+    .btn.danger{
+      border-color: rgba(255,107,107,.45);
+      background: linear-gradient(180deg, rgba(255,107,107,.14), rgba(255,255,255,.02));
+    }
+    .btn.ghost{
+      background: rgba(255,255,255,.02);
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 280px 1fr;
+      gap:14px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+    .card{
+      border:1px solid var(--line);
+      border-radius:16px;
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .cardHeader{
+      padding:12px 12px 10px 12px;
+      border-bottom:1px solid var(--line);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .cardHeader h2{
+      margin:0;
+      font-size:13px;
+      letter-spacing:.25px;
+    }
+    .cardHeader .small{
+      color:var(--muted); font-size:12px; font-weight:600;
+    }
+    .cardBody{ padding:12px; }
+    .tabs{
+      display:flex; gap:8px; flex-wrap:wrap;
+      padding:10px 12px;
+      border-bottom:1px solid var(--line);
+      background: rgba(0,0,0,.12);
+    }
+    .tab{
+      cursor:pointer;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.02);
+      color:var(--muted);
+      padding:8px 10px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      user-select:none;
+      display:inline-flex; align-items:center; gap:8px;
+    }
+    .tab.active{
+      color:var(--text);
+      border-color: rgba(138,209,255,.40);
+      background: rgba(138,209,255,.10);
+    }
+    .section{ display:none; }
+    .section.active{ display:block; }
+
+    .fieldRow{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    @media (max-width: 520px){ .fieldRow{ grid-template-columns: 1fr; } }
+
+    .field{
+      border:1px solid var(--line);
+      border-radius:14px;
+      background: rgba(255,255,255,.02);
+      padding:10px;
+    }
+    .field label{ display:block; font-size:12px; color:var(--muted); margin-bottom:6px; font-weight:700; }
+    .field input, .field select, .field textarea{
+      width:100%;
+      background: rgba(0,0,0,.12);
+      border:1px solid var(--line);
+      color:var(--text);
+      padding:10px 10px;
+      border-radius:12px;
+      outline:none;
+      font-size:13px;
+    }
+    .field textarea{ min-height:72px; resize:vertical; }
+    .field input:focus, .field select:focus, .field textarea:focus{
+      border-color: var(--line2);
+    }
+
+    table{ width:100%; border-collapse:separate; border-spacing:0; overflow:hidden; }
+    th, td{
+      text-align:left; padding:10px 10px;
+      border-bottom:1px solid var(--line);
+      font-size:13px;
+      vertical-align:top;
+    }
+    th{ font-size:12px; color:var(--muted); font-weight:900; letter-spacing:.2px; }
+    tr:hover td{ background: rgba(255,255,255,.02); }
+    .rowActions{ display:flex; gap:8px; flex-wrap:wrap; }
+    .mini{
+      cursor:pointer;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.02);
+      color:var(--text);
+      padding:7px 9px;
+      border-radius:12px;
+      font-size:12px;
+      font-weight:800;
+      user-select:none;
+    }
+    .mini:active{ transform: translateY(1px); }
+    .mini.bad{ border-color: rgba(255,107,107,.5); }
+    .mini.good{ border-color: rgba(43,212,166,.45); }
+    .mini.warn{ border-color: rgba(255,204,102,.45); }
+    .muted{ color:var(--muted); }
+    .muter{ color:var(--muter); }
+    .kpiRow{
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap:10px;
+      margin-bottom:12px;
+    }
+    @media (max-width: 900px){ .kpiRow{ grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 520px){ .kpiRow{ grid-template-columns: 1fr; } }
+    .kpi{
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:12px;
+      background: rgba(255,255,255,.03);
+    }
+    .kpi .label{ color:var(--muted); font-size:12px; font-weight:800; }
+    .kpi .value{ font-size:18px; font-weight:950; margin-top:6px; }
+    .kpi .hint{ margin-top:6px; color:var(--muter); font-size:12px; line-height:1.35; }
+
+    .notice{
+      border:1px dashed rgba(138,209,255,.45);
+      background: rgba(138,209,255,.08);
+      border-radius:16px;
+      padding:12px;
+      color:var(--text);
+      margin-bottom:12px;
+      font-size:13px;
+      line-height:1.4;
+    }
+    .notice strong{ color:var(--accent); }
+    .inline{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .spacer{ height:10px; }
+    .hr{ height:1px; background:var(--line); margin:12px 0; }
+
+    .badge{
+      display:inline-flex; align-items:center; gap:6px;
+      font-size:12px; font-weight:900;
+      padding:6px 9px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.02);
+      color: var(--text);
+      white-space:nowrap;
+    }
+    .badge.good{ border-color: rgba(43,212,166,.45); }
+    .badge.warn{ border-color: rgba(255,204,102,.45); }
+    .badge.bad{ border-color: rgba(255,107,107,.45); }
+
+    /* Modal */
+    .modalBack{
+      position:fixed; inset:0;
+      background: rgba(0,0,0,.55);
+      display:none;
+      align-items:center; justify-content:center;
+      padding:18px;
+      z-index: 50;
+    }
+    .modalBack.open{ display:flex; }
+    .modal{
+      width:min(860px, 100%);
+      border:1px solid var(--line);
+      border-radius:18px;
+      background: linear-gradient(180deg, rgba(18,24,38,.96), rgba(14,21,34,.96));
+      box-shadow: 0 30px 80px rgba(0,0,0,.65);
+      overflow:hidden;
+    }
+    .modalHeader{
+      padding:12px;
+      border-bottom:1px solid var(--line);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .modalHeader h3{ margin:0; font-size:13px; letter-spacing:.2px; }
+    .modalBody{ padding:12px; }
+    .modalFooter{
+      padding:12px;
+      border-top:1px solid var(--line);
+      display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;
+    }
+
+    /* Print */
+    @media print{
+      body{ background:#fff; color:#000; }
+      .topbar, .tabs, .cardHeader .rowActions, .noPrint, .rightControls{ display:none !important; }
+      .wrap{ max-width: none; padding:0; }
+      .card{ box-shadow:none; border:0; border-radius:0; background:#fff; }
+      th, td{ border-color:#ddd; }
+      .badge{ border-color:#ddd; background:#f7f7f7; }
+      .notice{ border:1px solid #ddd; background:#f7f7ff; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <h1><span class="sig">40K Tournament Ops</span> <span class="muted">— Local Tournament Runner</span></h1>
+        <p class="sub">Runs entirely in your browser using localStorage. Add players, generate Swiss pairings, record results, print pairings/standings, and export/import JSON for backups.</p>
+      </div>
+
+      <div class="rightControls noPrint">
+        <button class="btn ghost" id="btnPrint">🖨️ Print</button>
+        <button class="btn" id="btnExport">⬇️ Export JSON</button>
+        <label class="btn" style="cursor:pointer;">
+          ⬆️ Import JSON
+          <input type="file" id="fileImport" accept="application/json" style="display:none;">
+        </label>
+        <button class="btn danger" id="btnWipe">🧨 Wipe</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Left rail -->
+      <div class="card">
+        <div class="cardHeader">
+          <h2>Event</h2>
+          <div class="small" id="saveStatus">Saved</div>
+        </div>
+        <div class="cardBody">
+          <div class="field">
+            <label for="eventName">Event Name</label>
+            <input id="eventName" placeholder="e.g., Bastior GT — Winter Slam" />
+          </div>
+          <div class="spacer"></div>
+
+          <div class="fieldRow">
+            <div class="field">
+              <label for="eventDate">Date</label>
+              <input id="eventDate" type="date" />
+            </div>
+            <div class="field">
+              <label for="roundCount">Rounds</label>
+              <select id="roundCount">
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5" selected>5</option>
+                <option value="6">6</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="spacer"></div>
+
+          <div class="fieldRow">
+            <div class="field">
+              <label for="scoringWin">Win Points</label>
+              <input id="scoringWin" type="number" min="0" step="1" value="3" />
+            </div>
+            <div class="field">
+              <label for="scoringDraw">Draw Points</label>
+              <input id="scoringDraw" type="number" min="0" step="1" value="1" />
+            </div>
+          </div>
+
+          <div class="spacer"></div>
+
+          <div class="fieldRow">
+            <div class="field">
+              <label for="scoringLoss">Loss Points</label>
+              <input id="scoringLoss" type="number" min="0" step="1" value="0" />
+            </div>
+            <div class="field">
+              <label for="useVP">Tie-break uses VP?</label>
+              <select id="useVP">
+                <option value="yes" selected>Yes (VP as Tie-break)</option>
+                <option value="no">No (points only)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="hr"></div>
+
+          <div class="notice">
+            <strong>Pairing logic:</strong> Swiss-style. Players sorted by points then VP. Adjacent pairing, with a best-effort to avoid repeat matchups. Byes give a win with VP = 100 unless you override.
+          </div>
+
+          <div class="inline noPrint">
+            <button class="btn primary" id="btnNextRound">➕ Create / Open Next Round</button>
+            <button class="btn" id="btnSeedDemo">🎲 Seed Demo Players</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main panel -->
+      <div class="card">
+        <div class="tabs noPrint">
+          <div class="tab active" data-tab="players">👥 Players</div>
+          <div class="tab" data-tab="pairings">🧾 Pairings</div>
+          <div class="tab" data-tab="standings">🏆 Standings</div>
+          <div class="tab" data-tab="tools">🛠️ Tools</div>
+        </div>
+
+        <div class="cardBody">
+          <!-- KPIs -->
+          <div class="kpiRow">
+            <div class="kpi">
+              <div class="label">Players</div>
+              <div class="value" id="kpiPlayers">0</div>
+              <div class="hint">Add players + factions. You can edit names later.</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Rounds Created</div>
+              <div class="value" id="kpiRounds">0</div>
+              <div class="hint">Create rounds and generate pairings as you go.</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Active Round</div>
+              <div class="value" id="kpiActiveRound">—</div>
+              <div class="hint">Record results inside the active round.</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Matches Logged</div>
+              <div class="value" id="kpiMatches">0</div>
+              <div class="hint">Each match adds points + VP for tie-breaks.</div>
+            </div>
+          </div>
+
+          <!-- Players -->
+          <div class="section active" id="tab-players">
+            <div class="notice">
+              Add players below. Army list URLs are optional. <strong>Tip:</strong> hit “Create / Open Next Round” when ready to pair Round 1.
+            </div>
+
+            <div class="fieldRow noPrint">
+              <div class="field">
+                <label for="newPlayerName">Player Name</label>
+                <input id="newPlayerName" placeholder="e.g., Nick" />
+              </div>
+              <div class="field">
+                <label for="newPlayerFaction">Faction</label>
+                <input id="newPlayerFaction" placeholder="e.g., Blood Angels, Necrons, Orks…" />
+              </div>
+            </div>
+            <div class="spacer noPrint"></div>
+            <div class="fieldRow noPrint">
+              <div class="field">
+                <label for="newPlayerSubfaction">Subfaction / Detachment</label>
+                <input id="newPlayerSubfaction" placeholder="e.g., Gladius Task Force / Sons of Sanguinius…" />
+              </div>
+              <div class="field">
+                <label for="newPlayerUrl">Army List Link (optional)</label>
+                <input id="newPlayerUrl" placeholder="https://…" />
+              </div>
+            </div>
+
+            <div class="spacer noPrint"></div>
+            <div class="inline noPrint">
+              <button class="btn primary" id="btnAddPlayer">➕ Add Player</button>
+              <button class="btn" id="btnSortAlpha">🔤 Sort A→Z</button>
+              <button class="btn" id="btnSortScore">📈 Sort by Score</button>
+            </div>
+
+            <div class="hr"></div>
+
+            <div style="overflow:auto;">
+              <table id="playersTable">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Player</th>
+                    <th>Faction</th>
+                    <th>Detachment</th>
+                    <th class="noPrint">Army Link</th>
+                    <th class="noPrint">Actions</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Pairings -->
+          <div class="section" id="tab-pairings">
+            <div class="notice">
+              Pick a round, generate pairings, then log results. You can manually edit pairings if needed.
+            </div>
+
+            <div class="inline noPrint" style="justify-content:space-between;">
+              <div class="inline">
+                <span class="badge" id="roundBadge">Round: —</span>
+                <select id="roundSelect" class="btn" style="padding:9px 10px;"></select>
+              </div>
+              <div class="inline">
+                <button class="btn primary" id="btnGeneratePairings">⚙️ Generate Pairings</button>
+                <button class="btn" id="btnLockRound">🔒 Lock Round</button>
+              </div>
+            </div>
+
+            <div class="hr"></div>
+
+            <div style="overflow:auto;">
+              <table id="pairingsTable">
+                <thead>
+                  <tr>
+                    <th>Table</th>
+                    <th>Player A</th>
+                    <th>Player B</th>
+                    <th>Result</th>
+                    <th class="noPrint">VP A</th>
+                    <th class="noPrint">VP B</th>
+                    <th class="noPrint">Actions</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+
+            <div class="spacer"></div>
+            <div class="notice">
+              <strong>Byes:</strong> If there’s an odd number of players, one player gets a Bye. Default is a Win + 100 VP (editable).
+            </div>
+          </div>
+
+          <!-- Standings -->
+          <div class="section" id="tab-standings">
+            <div class="notice">
+              Standings update automatically. Tie-breaks: <strong>VP</strong> then <strong>SoS</strong> (strength of schedule: sum of opponents’ points), then name.
+            </div>
+
+            <div class="inline noPrint">
+              <button class="btn" id="btnRecalc">🔄 Recalculate</button>
+              <button class="btn primary" id="btnPrintStandings">🖨️ Print Standings</button>
+            </div>
+
+            <div class="hr"></div>
+
+            <div style="overflow:auto;">
+              <table id="standingsTable">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Player</th>
+                    <th>Faction</th>
+                    <th>Pts</th>
+                    <th>W–D–L</th>
+                    <th>VP</th>
+                    <th>SoS</th>
+                    <th>Opponents</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Tools -->
+          <div class="section" id="tab-tools">
+            <div class="notice">
+              Quick tools for sanity and table-side operations.
+            </div>
+
+            <div class="field">
+              <label>Event Notes (local-only)</label>
+              <textarea id="eventNotes" placeholder="Judge notes, terrain notes, mission pack notes, etc."></textarea>
+            </div>
+
+            <div class="spacer"></div>
+
+            <div class="inline noPrint">
+              <button class="btn" id="btnCopyStandings">📋 Copy Standings (TSV)</button>
+              <button class="btn" id="btnCopyPairings">📋 Copy Pairings (TSV)</button>
+              <button class="btn danger" id="btnUndo">↩️ Undo (last change)</button>
+            </div>
+
+            <div class="hr"></div>
+
+            <div class="notice">
+              <strong>Heads up:</strong> Undo is “one step” (snapshot-based). Export JSON before a big change if you want extra safety.
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Result Editor -->
+  <div class="modalBack" id="modalBack" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3 id="modalTitle">Edit Result</h3>
+        <button class="mini" id="btnModalClose">✕</button>
+      </div>
+      <div class="modalBody" id="modalBody"></div>
+      <div class="modalFooter">
+        <button class="btn" id="btnModalCancel">Cancel</button>
+        <button class="btn primary" id="btnModalSave">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /***************
+     * 40K Tournament Ops
+     * Local-only Swiss tournament runner
+     * Data stored in localStorage under STORAGE_KEY
+     ***************/
+
+    const STORAGE_KEY = "tournamentOps40k_v1";
+    const SNAPSHOT_KEY = "tournamentOps40k_v1_snapshot";
+
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+    const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
+    const clampInt = (v, d=0) => {
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) ? n : d;
+    };
+
+    const nowISODate = () => {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,"0");
+      const dd = String(d.getDate()).padStart(2,"0");
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    function defaultState(){
+      return {
+        meta: {
+          name: "Bastior GT — Tournament Ops",
+          date: nowISODate(),
+          roundsPlanned: 5,
+          scoring: { win: 3, draw: 1, loss: 0 },
+          useVP: true,
+          notes: ""
+        },
+        players: [
+          // {id, name, faction, detachment, url}
+        ],
+        rounds: [
+          // { number, locked, pairings: [ {table, aId, bId|null, result:{aVP,bVP,outcome:"A"|"B"|"D"|"BYE"|"NONE"} } ] }
+        ],
+        activeRound: 0
+      };
+    }
+
+    let state = load() ?? defaultState();
+    let dirtyTimer = null;
+
+    function save(snapshot=true){
+      // save a one-step snapshot for undo
+      if(snapshot){
+        localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(state));
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      setSaveStatus("Saved");
+    }
+
+    function load(){
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return null;
+      try { return JSON.parse(raw); } catch { return null; }
+    }
+
+    function setSaveStatus(text){
+      const el = $("#saveStatus");
+      if(!el) return;
+      el.textContent = text;
+      if(dirtyTimer) clearTimeout(dirtyTimer);
+      dirtyTimer = setTimeout(()=> el.textContent = "Saved", 900);
+    }
+
+    function markDirty(){
+      setSaveStatus("Saving…");
+      // debounce not necessary; keep simple
+      save(false);
+    }
+
+    function snapAndSave(){
+      setSaveStatus("Saving…");
+      save(true);
+    }
+
+    function getPlayer(id){ return state.players.find(p => p.id === id) || null; }
+
+    function playerStats(){
+      // returns map playerId => stats
+      const stats = {};
+      for(const p of state.players){
+        stats[p.id] = {
+          id: p.id, name: p.name, faction: p.faction, detachment: p.detachment, url: p.url,
+          points: 0, vp: 0, w:0, d:0, l:0,
+          opps: new Set(),
+          sos: 0 // computed after points set
+        };
+      }
+
+      const winPts = clampInt(state.meta.scoring.win, 3);
+      const drawPts = clampInt(state.meta.scoring.draw, 1);
+      const lossPts = clampInt(state.meta.scoring.loss, 0);
+
+      for(const rnd of state.rounds){
+        for(const m of rnd.pairings){
+          if(!m || !m.aId) continue;
+
+          const a = stats[m.aId];
+          if(!a) continue;
+
+          if(m.bId){
+            const b = stats[m.bId];
+            if(b){
+              a.opps.add(b.id);
+              b.opps.add(a.id);
+            }
+          }
+
+          const res = m.result || { outcome:"NONE", aVP:0, bVP:0 };
+          const aVP = clampInt(res.aVP, 0);
+          const bVP = clampInt(res.bVP, 0);
+
+          // Always add VP if configured; still store it for display
+          if(state.meta.useVP){
+            a.vp += aVP;
+            if(m.bId && stats[m.bId]) stats[m.bId].vp += bVP;
+          }
+
+          // Outcome:
+          // "A" => A wins
+          // "B" => B wins
+          // "D" => draw
+          // "BYE" => A bye (A gets win)
+          // "NONE" => unreported
+          if(res.outcome === "A"){
+            a.points += winPts; a.w += 1;
+            if(m.bId && stats[m.bId]){ stats[m.bId].points += lossPts; stats[m.bId].l += 1; }
+          }else if(res.outcome === "B"){
+            a.points += lossPts; a.l += 1;
+            if(m.bId && stats[m.bId]){ stats[m.bId].points += winPts; stats[m.bId].w += 1; }
+          }else if(res.outcome === "D"){
+            a.points += drawPts; a.d += 1;
+            if(m.bId && stats[m.bId]){ stats[m.bId].points += drawPts; stats[m.bId].d += 1; }
+          }else if(res.outcome === "BYE"){
+            a.points += winPts; a.w += 1;
+            // opponent none
+          }
+        }
+      }
+
+      // Strength of schedule: sum opponent points
+      for(const id in stats){
+        let sum = 0;
+        for(const oppId of stats[id].opps){
+          if(stats[oppId]) sum += stats[oppId].points;
+        }
+        stats[id].sos = sum;
+      }
+
+      return stats;
+    }
+
+    function standingsList(){
+      const stats = playerStats();
+      const list = Object.values(stats);
+      const useVP = !!state.meta.useVP;
+      list.sort((x,y)=>{
+        if(y.points !== x.points) return y.points - x.points;
+        if(useVP && y.vp !== x.vp) return y.vp - x.vp;
+        if(y.sos !== x.sos) return y.sos - x.sos;
+        return x.name.localeCompare(y.name);
+      });
+      return list;
+    }
+
+    function matchupHistory(){
+      // set of "aId|bId" ordered (min|max) for all played/paired matches
+      const set = new Set();
+      for(const rnd of state.rounds){
+        for(const m of rnd.pairings){
+          if(m?.aId && m?.bId){
+            const k = [m.aId, m.bId].sort().join("|");
+            set.add(k);
+          }
+        }
+      }
+      return set;
+    }
+
+    function generateSwissPairings(roundNumber){
+      const players = standingsList().map(s => s.id);
+      const played = matchupHistory();
+
+      // If odd players, assign bye to lowest-ranked player who hasn't had a bye
+      // Track byes by checking matches with outcome BYE or bId null (we store bId null).
+      const byeHistory = new Set();
+      for(const rnd of state.rounds){
+        for(const m of rnd.pairings){
+          if(m && m.bId === null) byeHistory.add(m.aId);
+        }
+      }
+
+      const available = [...players];
+      let byePlayer = null;
+
+      if(available.length % 2 === 1){
+        // choose from bottom
+        for(let i = available.length - 1; i >= 0; i--){
+          const pid = available[i];
+          if(!byeHistory.has(pid)){
+            byePlayer = pid;
+            available.splice(i,1);
+            break;
+          }
+        }
+        // if everyone had a bye, just take bottom
+        if(!byePlayer){
+          byePlayer = available.pop();
+        }
+      }
+
+      // Pair adjacent with best-effort swap to avoid repeats
+      const pairings = [];
+      let table = 1;
+      for(let i = 0; i < available.length; i += 2){
+        let a = available[i];
+        let b = available[i+1];
+
+        if(!b) break;
+
+        let key = [a,b].sort().join("|");
+        if(played.has(key)){
+          // try to swap b with a later opponent
+          let swapped = false;
+          for(let j = i+3; j < available.length; j += 2){
+            const b2 = available[j];
+            const k2 = [a,b2].sort().join("|");
+            if(!played.has(k2)){
+              // swap b and b2
+              available[i+1] = b2;
+              available[j] = b;
+              b = b2;
+              swapped = true;
+              break;
+            }
+          }
+          // if not swapped, leave as is
+        }
+
+        pairings.push({
+          table: table++,
+          aId: a,
+          bId: b,
+          result: { outcome:"NONE", aVP: 0, bVP: 0 }
+        });
+      }
+
+      if(byePlayer){
+        pairings.push({
+          table: table++,
+          aId: byePlayer,
+          bId: null,
+          result: { outcome:"BYE", aVP: 100, bVP: 0 }
+        });
+      }
+
+      return pairings;
+    }
+
+    function getRound(n){ return state.rounds.find(r => r.number === n) || null; }
+
+    function ensureRoundSelect(){
+      const sel = $("#roundSelect");
+      if(!sel) return;
+
+      sel.innerHTML = "";
+      if(state.rounds.length === 0){
+        const opt = document.createElement("option");
+        opt.value = "0";
+        opt.textContent = "No rounds yet";
+        sel.appendChild(opt);
+        sel.disabled = true;
+      }else{
+        sel.disabled = false;
+        for(const r of state.rounds){
+          const opt = document.createElement("option");
+          opt.value = String(r.number);
+          opt.textContent = `Round ${r.number}${r.locked ? " (locked)" : ""}`;
+          sel.appendChild(opt);
+        }
+        // default to active round if exists
+        const val = state.activeRound || state.rounds[state.rounds.length-1].number;
+        sel.value = String(val);
+      }
+    }
+
+    function setActiveRound(n){
+      state.activeRound = n;
+      snapAndSave();
+      refreshAll();
+    }
+
+    function countLoggedMatches(){
+      let c = 0;
+      for(const r of state.rounds){
+        for(const m of r.pairings){
+          if(m?.result?.outcome && m.result.outcome !== "NONE") c++;
+        }
+      }
+      return c;
+    }
+
+    function refreshKPIs(){
+      $("#kpiPlayers").textContent = state.players.length;
+      $("#kpiRounds").textContent = state.rounds.length;
+      $("#kpiActiveRound").textContent = state.activeRound ? `R${state.activeRound}` : "—";
+      $("#kpiMatches").textContent = countLoggedMatches();
+    }
+
+    function refreshEventFields(){
+      $("#eventName").value = state.meta.name || "";
+      $("#eventDate").value = state.meta.date || nowISODate();
+      $("#roundCount").value = String(state.meta.roundsPlanned ?? 5);
+      $("#scoringWin").value = state.meta.scoring?.win ?? 3;
+      $("#scoringDraw").value = state.meta.scoring?.draw ?? 1;
+      $("#scoringLoss").value = state.meta.scoring?.loss ?? 0;
+      $("#useVP").value = state.meta.useVP ? "yes" : "no";
+      $("#eventNotes").value = state.meta.notes || "";
+    }
+
+    function refreshPlayersTable(){
+      const tbody = $("#playersTable tbody");
+      tbody.innerHTML = "";
+
+      state.players.forEach((p, idx)=>{
+        const tr = document.createElement("tr");
+
+        const linkCell = p.url ? `<a href="${escapeHtml(p.url)}" target="_blank" rel="noreferrer" class="muted">Open</a>` : `<span class="muter">—</span>`;
+
+        tr.innerHTML = `
+          <td class="muted">${idx+1}</td>
+          <td><strong>${escapeHtml(p.name)}</strong></td>
+          <td>${escapeHtml(p.faction || "—")}</td>
+          <td class="muted">${escapeHtml(p.detachment || "—")}</td>
+          <td class="noPrint">${linkCell}</td>
+          <td class="noPrint">
+            <div class="rowActions">
+              <button class="mini warn" data-act="edit" data-id="${p.id}">Edit</button>
+              <button class="mini bad" data-act="remove" data-id="${p.id}">Remove</button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      tbody.addEventListener("click", onPlayersTableClick, { once:true });
+    }
+
+    function onPlayersTableClick(e){
+      const btn = e.target.closest("button[data-act]");
+      if(!btn) return;
+      const act = btn.getAttribute("data-act");
+      const id = btn.getAttribute("data-id");
+      if(!id) return;
+
+      if(act === "remove"){
+        const p = getPlayer(id);
+        if(!p) return;
+        if(!confirm(`Remove "${p.name}"? This will also affect pairings/results.`)) return;
+        snapAndSave();
+        // remove player
+        state.players = state.players.filter(x => x.id !== id);
+        // remove from existing rounds' pairings (set to null)
+        for(const r of state.rounds){
+          r.pairings = r.pairings.filter(m => m.aId !== id && m.bId !== id);
+        }
+        refreshAll();
+        return;
+      }
+
+      if(act === "edit"){
+        openPlayerEditor(id);
+        return;
+      }
+    }
+
+    function refreshRoundBadge(n){
+      const b = $("#roundBadge");
+      const r = getRound(n);
+      if(!r) { b.textContent = "Round: —"; return; }
+      b.textContent = `Round: ${r.number}${r.locked ? " (locked)" : ""}`;
+    }
+
+    function refreshPairingsTable(){
+      const sel = $("#roundSelect");
+      const n = clampInt(sel?.value, state.activeRound || 0);
+      const rnd = getRound(n);
+      refreshRoundBadge(n);
+
+      const tbody = $("#pairingsTable tbody");
+      tbody.innerHTML = "";
+
+      if(!rnd){
+        tbody.innerHTML = `<tr><td colspan="7" class="muted">No round selected.</td></tr>`;
+        return;
+      }
+
+      const locked = !!rnd.locked;
+
+      for(const m of rnd.pairings){
+        const a = getPlayer(m.aId);
+        const b = m.bId ? getPlayer(m.bId) : null;
+
+        const res = m.result || { outcome:"NONE", aVP:0, bVP:0 };
+        const label = renderResultLabel(res, !!m.bId);
+
+        tbody.insertAdjacentHTML("beforeend", `
+          <tr>
+            <td class="muted">#${m.table}</td>
+            <td>
+              <strong>${a ? escapeHtml(a.name) : "<span class='muted'>[missing]</span>"}</strong>
+              <div class="muter">${a ? escapeHtml(a.faction || "") : ""}</div>
+            </td>
+            <td>
+              ${b ? `<strong>${escapeHtml(b.name)}</strong><div class="muter">${escapeHtml(b.faction || "")}</div>` : `<span class="badge warn">BYE</span>`}
+            </td>
+            <td>${label}</td>
+            <td class="noPrint">${locked ? `<span class="muted">${clampInt(res.aVP,0)}</span>` : `<input data-vp="a" data-table="${m.table}" type="number" min="0" step="1" value="${clampInt(res.aVP,0)}" style="width:90px;">`}</td>
+            <td class="noPrint">${b ? (locked ? `<span class="muted">${clampInt(res.bVP,0)}</span>` : `<input data-vp="b" data-table="${m.table}" type="number" min="0" step="1" value="${clampInt(res.bVP,0)}" style="width:90px;">`) : `<span class="muter">—</span>`}</td>
+            <td class="noPrint">
+              <div class="rowActions">
+                <button class="mini good" data-act="result" data-table="${m.table}" ${locked ? "disabled" : ""}>Result</button>
+                <button class="mini warn" data-act="swap" data-table="${m.table}" ${locked ? "disabled" : ""}>Swap</button>
+                <button class="mini bad" data-act="drop" data-table="${m.table}" ${locked ? "disabled" : ""}>Drop</button>
+              </div>
+            </td>
+          </tr>
+        `);
+      }
+
+      // handlers
+      tbody.addEventListener("click", (e)=>{
+        const btn = e.target.closest("button[data-act]");
+        if(!btn) return;
+        const act = btn.getAttribute("data-act");
+        const table = clampInt(btn.getAttribute("data-table"), 0);
+        if(!table) return;
+        const idx = rnd.pairings.findIndex(x => x.table === table);
+        if(idx < 0) return;
+
+        if(act === "result"){
+          openResultEditor(rnd.number, table);
+        }else if(act === "swap"){
+          openSwapEditor(rnd.number, table);
+        }else if(act === "drop"){
+          if(!confirm("Drop this pairing? (It will be removed.)")) return;
+          snapAndSave();
+          rnd.pairings.splice(idx,1);
+          // re-table numbering
+          rnd.pairings.forEach((m,i)=> m.table = i+1);
+          refreshAll();
+        }
+      }, { once:true });
+
+      // VP inputs
+      $$("input[data-vp]", tbody).forEach(inp=>{
+        inp.addEventListener("input", ()=>{
+          const which = inp.getAttribute("data-vp");
+          const table = clampInt(inp.getAttribute("data-table"), 0);
+          const match = rnd.pairings.find(x => x.table === table);
+          if(!match) return;
+          snapAndSave();
+          match.result = match.result || { outcome:"NONE", aVP:0, bVP:0 };
+          if(which === "a") match.result.aVP = clampInt(inp.value, 0);
+          if(which === "b") match.result.bVP = clampInt(inp.value, 0);
+          refreshAll();
+        });
+      });
+    }
+
+    function renderResultLabel(res, hasOpponent){
+      const out = res?.outcome || "NONE";
+      if(out === "NONE") return `<span class="badge">Unreported</span>`;
+      if(out === "BYE") return `<span class="badge warn">Bye (Win)</span>`;
+      if(out === "D") return `<span class="badge warn">Draw</span>`;
+      if(out === "A") return `<span class="badge good">A Wins</span>`;
+      if(out === "B") return `<span class="badge bad">B Wins</span>`;
+      return `<span class="badge">—</span>`;
+    }
+
+    function refreshStandings(){
+      const tbody = $("#standingsTable tbody");
+      tbody.innerHTML = "";
+
+      if(state.players.length === 0){
+        tbody.innerHTML = `<tr><td colspan="8" class="muted">No players yet.</td></tr>`;
+        return;
+      }
+
+      const list = standingsList();
+      for(let i=0;i<list.length;i++){
+        const s = list[i];
+        const oppNames = Array.from(s.opps || []).map(id => getPlayer(id)?.name).filter(Boolean).join(", ");
+        tbody.insertAdjacentHTML("beforeend", `
+          <tr>
+            <td><strong>${i+1}</strong></td>
+            <td><strong>${escapeHtml(s.name)}</strong></td>
+            <td>${escapeHtml(s.faction || "—")}</td>
+            <td><strong>${s.points}</strong></td>
+            <td class="muted">${s.w}–${s.d}–${s.l}</td>
+            <td>${state.meta.useVP ? s.vp : `<span class="muter">—</span>`}</td>
+            <td class="muted">${s.sos}</td>
+            <td class="muted" style="max-width:380px;">${escapeHtml(oppNames || "—")}</td>
+          </tr>
+        `);
+      }
+    }
+
+    function escapeHtml(str){
+      return String(str ?? "").replace(/[&<>"']/g, m => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[m]));
+    }
+
+    function refreshAll(){
+      refreshEventFields();
+      ensureRoundSelect();
+      refreshKPIs();
+      refreshPlayersTable();
+      refreshPairingsTable();
+      refreshStandings();
+    }
+
+    /***************
+     * Modal helpers
+     ***************/
+    const modalBack = $("#modalBack");
+    const modalBody = $("#modalBody");
+    const modalTitle = $("#modalTitle");
+    let modalCtx = null;
+
+    function openModal(title, html, ctx){
+      modalCtx = ctx || null;
+      modalTitle.textContent = title;
+      modalBody.innerHTML = html;
+      modalBack.classList.add("open");
+      modalBack.setAttribute("aria-hidden","false");
+      // focus first input if exists
+      setTimeout(()=>{
+        const first = modalBody.querySelector("input,select,textarea,button");
+        if(first) first.focus();
+      }, 50);
+    }
+
+    function closeModal(){
+      modalBack.classList.remove("open");
+      modalBack.setAttribute("aria-hidden","true");
+      modalBody.innerHTML = "";
+      modalCtx = null;
+    }
+
+    $("#btnModalClose").addEventListener("click", closeModal);
+    $("#btnModalCancel").addEventListener("click", closeModal);
+
+    modalBack.addEventListener("click", (e)=>{
+      if(e.target === modalBack) closeModal();
+    });
+
+    /***************
+     * Editors
+     ***************/
+    function openPlayerEditor(playerId){
+      const p = getPlayer(playerId);
+      if(!p) return;
+
+      openModal(`Edit Player — ${p.name}`, `
+        <div class="fieldRow">
+          <div class="field">
+            <label>Name</label>
+            <input id="editName" value="${escapeHtml(p.name)}" />
+          </div>
+          <div class="field">
+            <label>Faction</label>
+            <input id="editFaction" value="${escapeHtml(p.faction || "")}" />
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div class="fieldRow">
+          <div class="field">
+            <label>Detachment</label>
+            <input id="editDetach" value="${escapeHtml(p.detachment || "")}" />
+          </div>
+          <div class="field">
+            <label>Army Link</label>
+            <input id="editUrl" value="${escapeHtml(p.url || "")}" placeholder="https://…" />
+          </div>
+        </div>
+      `, { type:"playerEdit", playerId });
+
+      $("#btnModalSave").onclick = ()=>{
+        snapAndSave();
+        p.name = ($("#editName").value || "").trim() || p.name;
+        p.faction = ($("#editFaction").value || "").trim();
+        p.detachment = ($("#editDetach").value || "").trim();
+        p.url = ($("#editUrl").value || "").trim();
+        closeModal();
+        refreshAll();
+      };
+    }
+
+    function openResultEditor(roundNumber, table){
+      const rnd = getRound(roundNumber);
+      if(!rnd) return;
+      const match = rnd.pairings.find(m => m.table === table);
+      if(!match) return;
+
+      const a = getPlayer(match.aId);
+      const b = match.bId ? getPlayer(match.bId) : null;
+      const res = match.result || { outcome:"NONE", aVP:0, bVP:0 };
+      const hasOpp = !!match.bId;
+
+      const options = hasOpp
+        ? `
+          <option value="NONE">Unreported</option>
+          <option value="A">A Wins</option>
+          <option value="B">B Wins</option>
+          <option value="D">Draw</option>
+        `
+        : `
+          <option value="BYE">Bye (A Wins)</option>
+          <option value="NONE">Unreported</option>
+        `;
+
+      openModal(`Round ${roundNumber} — Table #${table} Result`, `
+        <div class="notice">
+          <div><strong>A:</strong> ${escapeHtml(a?.name || "[missing]")}${a?.faction ? ` <span class="muted">(${escapeHtml(a.faction)})</span>` : ""}</div>
+          <div><strong>B:</strong> ${b ? `${escapeHtml(b.name)} <span class="muted">(${escapeHtml(b.faction || "")})</span>` : `<span class="badge warn">BYE</span>`}</div>
+        </div>
+
+        <div class="fieldRow">
+          <div class="field">
+            <label>Outcome</label>
+            <select id="resOutcome">${options}</select>
+          </div>
+          <div class="field">
+            <label>Quick Set</label>
+            <select id="quickSet">
+              <option value="">—</option>
+              <option value="A_100_60">A wins 100–60</option>
+              <option value="B_60_100">B wins 60–100</option>
+              <option value="D_80_80">Draw 80–80</option>
+              <option value="BYE_100_0">Bye 100–0</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="fieldRow">
+          <div class="field">
+            <label>VP — A</label>
+            <input id="resA" type="number" min="0" step="1" value="${clampInt(res.aVP,0)}" />
+          </div>
+          <div class="field">
+            <label>VP — B</label>
+            <input id="resB" type="number" min="0" step="1" value="${clampInt(res.bVP,0)}" ${hasOpp ? "" : "disabled"} />
+          </div>
+        </div>
+
+        <div class="spacer"></div>
+        <div class="muted" style="font-size:12px; line-height:1.35;">
+          Scoring: Win ${clampInt(state.meta.scoring.win,3)} / Draw ${clampInt(state.meta.scoring.draw,1)} / Loss ${clampInt(state.meta.scoring.loss,0)}.
+          ${state.meta.useVP ? "VP adds to tie-break." : "VP tie-break disabled."}
+        </div>
+      `, { type:"resultEdit", roundNumber, table });
+
+      $("#resOutcome").value = res.outcome || "NONE";
+
+      $("#quickSet").addEventListener("change", (e)=>{
+        const v = e.target.value;
+        if(!v) return;
+        const [o,aVP,bVP] = v.split("_");
+        $("#resOutcome").value = o;
+        $("#resA").value = aVP;
+        if(hasOpp) $("#resB").value = bVP;
+        if(!hasOpp && o !== "BYE") $("#resA").value = "0";
+      });
+
+      $("#btnModalSave").onclick = ()=>{
+        snapAndSave();
+        match.result = match.result || { outcome:"NONE", aVP:0, bVP:0 };
+        match.result.outcome = $("#resOutcome").value;
+        match.result.aVP = clampInt($("#resA").value, 0);
+        match.result.bVP = hasOpp ? clampInt($("#resB").value, 0) : 0;
+        closeModal();
+        refreshAll();
+      };
+    }
+
+    function openSwapEditor(roundNumber, table){
+      const rnd = getRound(roundNumber);
+      if(!rnd) return;
+      const match = rnd.pairings.find(m => m.table === table);
+      if(!match) return;
+
+      // Only allow swap of B player with another B on same round (quick fix for repeats)
+      const options = rnd.pairings
+        .filter(m => m.table !== table && m.bId) // only matches with a B
+        .map(m=>{
+          const b = getPlayer(m.bId);
+          return `<option value="${m.table}">Table #${m.table} — swap with ${escapeHtml(b?.name || "[missing]")}</option>`;
+        }).join("");
+
+      if(!options){
+        alert("No other eligible pairings to swap with.");
+        return;
+      }
+
+      openModal(`Swap Opponents — Round ${roundNumber}`, `
+        <div class="notice">
+          Swaps the <strong>B player</strong> from this table with another table’s B player. Handy to break accidental repeat pairings.
+        </div>
+        <div class="field">
+          <label>Choose another table</label>
+          <select id="swapTarget">${options}</select>
+        </div>
+      `, { type:"swap", roundNumber, table });
+
+      $("#btnModalSave").onclick = ()=>{
+        const targetTable = clampInt($("#swapTarget").value, 0);
+        const other = rnd.pairings.find(m => m.table === targetTable);
+        if(!other) return;
+
+        snapAndSave();
+        const tmp = match.bId;
+        match.bId = other.bId;
+        other.bId = tmp;
+
+        // Clear results (since matchups changed)
+        match.result = { outcome:"NONE", aVP:0, bVP:0 };
+        other.result = { outcome:"NONE", aVP:0, bVP:0 };
+
+        closeModal();
+        refreshAll();
+      };
+    }
+
+    /***************
+     * UI wiring
+     ***************/
+    // Tabs
+    $$(".tab").forEach(t=>{
+      t.addEventListener("click", ()=>{
+        $$(".tab").forEach(x => x.classList.remove("active"));
+        t.classList.add("active");
+        const key = t.getAttribute("data-tab");
+        $$(".section").forEach(s => s.classList.remove("active"));
+        $(`#tab-${key}`).classList.add("active");
+      });
+    });
+
+    // Event fields
+    $("#eventName").addEventListener("input", ()=>{
+      state.meta.name = $("#eventName").value.trim();
+      markDirty();
+    });
+    $("#eventDate").addEventListener("change", ()=>{
+      state.meta.date = $("#eventDate").value || nowISODate();
+      snapAndSave(); refreshAll();
+    });
+    $("#roundCount").addEventListener("change", ()=>{
+      state.meta.roundsPlanned = clampInt($("#roundCount").value, 5);
+      snapAndSave(); refreshAll();
+    });
+    $("#scoringWin").addEventListener("input", ()=>{
+      state.meta.scoring.win = clampInt($("#scoringWin").value, 3);
+      snapAndSave(); refreshAll();
+    });
+    $("#scoringDraw").addEventListener("input", ()=>{
+      state.meta.scoring.draw = clampInt($("#scoringDraw").value, 1);
+      snapAndSave(); refreshAll();
+    });
+    $("#scoringLoss").addEventListener("input", ()=>{
+      state.meta.scoring.loss = clampInt($("#scoringLoss").value, 0);
+      snapAndSave(); refreshAll();
+    });
+    $("#useVP").addEventListener("change", ()=>{
+      state.meta.useVP = $("#useVP").value === "yes";
+      snapAndSave(); refreshAll();
+    });
+    $("#eventNotes").addEventListener("input", ()=>{
+      state.meta.notes = $("#eventNotes").value;
+      markDirty();
+    });
+
+    // Players
+    $("#btnAddPlayer").addEventListener("click", ()=>{
+      const name = ($("#newPlayerName").value || "").trim();
+      const faction = ($("#newPlayerFaction").value || "").trim();
+      const detachment = ($("#newPlayerSubfaction").value || "").trim();
+      const url = ($("#newPlayerUrl").value || "").trim();
+
+      if(!name){
+        alert("Player name required.");
+        return;
+      }
+      snapAndSave();
+      state.players.push({ id: uid(), name, faction, detachment, url });
+
+      $("#newPlayerName").value = "";
+      $("#newPlayerFaction").value = "";
+      $("#newPlayerSubfaction").value = "";
+      $("#newPlayerUrl").value = "";
+
+      refreshAll();
+    });
+
+    $("#btnSortAlpha").addEventListener("click", ()=>{
+      snapAndSave();
+      state.players.sort((a,b)=> a.name.localeCompare(b.name));
+      refreshAll();
+    });
+
+    $("#btnSortScore").addEventListener("click", ()=>{
+      snapAndSave();
+      const rank = standingsList().map(s => s.id);
+      const map = new Map(rank.map((id, i)=> [id, i]));
+      state.players.sort((a,b)=> (map.get(a.id) ?? 9999) - (map.get(b.id) ?? 9999));
+      refreshAll();
+    });
+
+    // Round control
+    $("#btnNextRound").addEventListener("click", ()=>{
+      if(state.players.length < 2){
+        alert("Add at least 2 players first.");
+        return;
+      }
+      const next = state.rounds.length ? Math.max(...state.rounds.map(r=>r.number)) + 1 : 1;
+      if(next > clampInt(state.meta.roundsPlanned, 5)){
+        if(!confirm(`You’ve planned ${state.meta.roundsPlanned} rounds. Create Round ${next} anyway?`)) return;
+      }
+      snapAndSave();
+      state.rounds.push({ number: next, locked: false, pairings: [] });
+      state.activeRound = next;
+      refreshAll();
+      // jump to Pairings tab
+      $$(".tab").find(t => t.getAttribute("data-tab")==="pairings")?.click();
+    });
+
+    $("#roundSelect").addEventListener("change", ()=>{
+      const n = clampInt($("#roundSelect").value, 0);
+      if(n) setActiveRound(n);
+    });
+
+    $("#btnGeneratePairings").addEventListener("click", ()=>{
+      const n = clampInt($("#roundSelect").value, state.activeRound || 0);
+      const rnd = getRound(n);
+      if(!rnd){ alert("No round selected."); return; }
+      if(rnd.locked){
+        alert("Round is locked.");
+        return;
+      }
+      if(rnd.pairings.length && !confirm("Overwrite existing pairings for this round?")) return;
+
+      snapAndSave();
+      rnd.pairings = generateSwissPairings(n);
+      // clear outcomes just in case
+      rnd.pairings.forEach(m => {
+        if(!m.result) m.result = { outcome:"NONE", aVP:0, bVP:0 };
+        // if bye, default is BYE outcome
+        if(m.bId === null) m.result = { outcome:"BYE", aVP: 100, bVP: 0 };
+      });
+
+      refreshAll();
+    });
+
+    $("#btnLockRound").addEventListener("click", ()=>{
+      const n = clampInt($("#roundSelect").value, state.activeRound || 0);
+      const rnd = getRound(n);
+      if(!rnd) return;
+      snapAndSave();
+      rnd.locked = !rnd.locked;
+      refreshAll();
+    });
+
+    // Standings tools
+    $("#btnRecalc").addEventListener("click", ()=> refreshAll());
+    $("#btnPrintStandings").addEventListener("click", ()=>{
+      // switch to standings tab then print
+      $$(".tab").find(t => t.getAttribute("data-tab")==="standings")?.click();
+      setTimeout(()=> window.print(), 50);
+    });
+
+    // Print
+    $("#btnPrint").addEventListener("click", ()=> window.print());
+
+    // Export / Import
+    $("#btnExport").addEventListener("click", ()=>{
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type:"application/json" });
+      const a = document.createElement("a");
+      const safeName = (state.meta.name || "tournament").replace(/[^\w\-]+/g,"_");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${safeName}_${state.meta.date || nowISODate()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    });
+
+    $("#fileImport").addEventListener("change", async (e)=>{
+      const file = e.target.files?.[0];
+      if(!file) return;
+      const text = await file.text();
+      try{
+        const data = JSON.parse(text);
+        if(!data || typeof data !== "object") throw new Error("Bad JSON");
+        if(!confirm("Import will overwrite the current event in this browser. Continue?")) return;
+        localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(state));
+        state = data;
+        save(false);
+        refreshAll();
+      }catch(err){
+        alert("Import failed: invalid JSON.");
+      }finally{
+        e.target.value = "";
+      }
+    });
+
+    $("#btnWipe").addEventListener("click", ()=>{
+      if(!confirm("Wipe everything? This clears the local event in this browser.")) return;
+      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(state));
+      state = defaultState();
+      save(false);
+      refreshAll();
+    });
+
+    // Tools: copy TSV
+    $("#btnCopyStandings").addEventListener("click", async ()=>{
+      const list = standingsList();
+      const rows = [
+        ["Rank","Player","Faction","Pts","W","D","L","VP","SoS"].join("\t"),
+        ...list.map((s,i)=> [i+1, s.name, s.faction||"", s.points, s.w, s.d, s.l, (state.meta.useVP?s.vp:""), s.sos].join("\t"))
+      ];
+      await copyText(rows.join("\n"));
+      alert("Standings copied (TSV). Paste into Sheets/Excel/Docs.");
+    });
+
+    $("#btnCopyPairings").addEventListener("click", async ()=>{
+      const n = clampInt($("#roundSelect").value, state.activeRound || 0);
+      const rnd = getRound(n);
+      if(!rnd){ alert("No round selected."); return; }
+      const rows = [
+        ["Round","Table","PlayerA","PlayerB","Outcome","VPA","VPB"].join("\t"),
+        ...rnd.pairings.map(m=>{
+          const a = getPlayer(m.aId)?.name || "";
+          const b = m.bId ? (getPlayer(m.bId)?.name || "") : "BYE";
+          const r = m.result || { outcome:"NONE", aVP:0, bVP:0 };
+          return [n, m.table, a, b, r.outcome, clampInt(r.aVP,0), clampInt(r.bVP,0)].join("\t");
+        })
+      ];
+      await copyText(rows.join("\n"));
+      alert("Pairings copied (TSV).");
+    });
+
+    async function copyText(text){
+      try{
+        await navigator.clipboard.writeText(text);
+      }catch{
+        // fallback
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+      }
+    }
+
+    // Undo
+    $("#btnUndo").addEventListener("click", ()=>{
+      const raw = localStorage.getItem(SNAPSHOT_KEY);
+      if(!raw){ alert("No undo snapshot available."); return; }
+      try{
+        const prev = JSON.parse(raw);
+        if(!confirm("Undo last change?")) return;
+        state = prev;
+        save(false);
+        refreshAll();
+      }catch{
+        alert("Undo failed (snapshot corrupted).");
+      }
+    });
+
+    // Demo seeding
+    $("#btnSeedDemo").addEventListener("click", ()=>{
+      if(state.players.length && !confirm("Add demo players alongside existing players?")) return;
+      snapAndSave();
+      const demo = [
+        ["Nick","Blood Angels","Sons of Sanguinius",""],
+        ["Ava","Necrons","Awakened Dynasty",""],
+        ["Miles","Orks","Waaagh! Tribe",""],
+        ["Jordan","T'au Empire","Kauyon",""],
+        ["Sam","Adeptus Custodes","Shield Host",""],
+        ["Taylor","Tyranids","Invasion Fleet",""],
+        ["Riley","Chaos Space Marines","Slaves to Darkness",""],
+        ["Morgan","Astra Militarum","Combined Regiment",""],
+        ["Casey","Aeldari","Battle Host",""],
+      ];
+      for(const [n,f,d,u] of demo){
+        state.players.push({ id: uid(), name:n, faction:f, detachment:d, url:u });
+      }
+      refreshAll();
+    });
+
+    // Startup
+    function init(){
+      // If blank, set defaults
+      if(!state.meta.date) state.meta.date = nowISODate();
+      if(!state.meta.scoring) state.meta.scoring = { win:3, draw:1, loss:0 };
+      $("#eventDate").value = state.meta.date;
+      save(false);
+      refreshAll();
+      // keep pairings round select in sync with active round
+      if(state.activeRound){
+        $("#roundSelect").value = String(state.activeRound);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
