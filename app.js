@@ -1,61 +1,112 @@
-import { loadState, saveState } from './state.js';
-import { nextRound } from './tournament.js';
-import { renderPlayers, renderPairings, renderStandings } from './render.js';
+// app.js
+import { loadState, saveState } from "./state.js";
+import {
+  nextRound,
+  generatePairingsForRound,
+  lockRound,
+} from "./tournament.js";
+import { renderAll } from "./render.js";
 
 let state = loadState();
 
-const landing = document.getElementById('viewLanding');
-const app = document.getElementById('viewApp');
+/* ---------------- Views ---------------- */
 
-function showLanding(){
+const landing = document.getElementById("viewLanding");
+const app = document.getElementById("viewApp");
+
+function showLanding() {
   landing.hidden = false;
   app.hidden = true;
 }
 
-function showApp(){
+function showApp() {
   landing.hidden = true;
   app.hidden = false;
-  document.getElementById('eventTitle').textContent = state.name;
   refresh();
 }
 
-function refresh(){
-  renderPlayers(state);
-  renderPairings(state);
-  renderStandings(state);
+/* ---------------- Refresh ---------------- */
+
+function refresh() {
   saveState(state);
+  renderAll(state);
 }
 
-document.getElementById('btnRecommend').onclick = ()=>{
-  state.name = document.getElementById('lEventName').value || '40K Event';
+/* ---------------- Landing Actions ---------------- */
+
+document.getElementById("btnRecommend").onclick = () => {
+  const name = document.getElementById("lEventName").value || "40K Event";
+  state.name = name;
+  state.meta.name = name;
+  state.meta.format = "swiss";
   showApp();
 };
 
-document.getElementById('btnCustomBuild').onclick = ()=>{
-  state.name = 'Custom 40K Event';
+document.getElementById("btnCustomBuild").onclick = () => {
+  state.name = "Custom 40K Event";
+  state.meta.name = state.name;
+  state.meta.format = "custom";
   showApp();
 };
 
-document.getElementById('btnAddPlayer').onclick = ()=>{
+/* ---------------- Players ---------------- */
+
+document.getElementById("btnAddPlayer").onclick = () => {
   const n = newPlayerName.value.trim();
-  if(!n) return;
-  state.players.push({ name:n, faction:newPlayerFaction.value });
-  newPlayerName.value='';
-  newPlayerFaction.value='';
+  if (!n) return;
+
+  state.players.push({
+    id: crypto.randomUUID(),
+    name: n,
+    faction: newPlayerFaction.value.trim(),
+  });
+
+  newPlayerName.value = "";
+  newPlayerFaction.value = "";
   refresh();
 };
 
-document.getElementById('btnNextRound').onclick = ()=>{
-  nextRound(state);
+/* ---------------- Rounds ---------------- */
+
+document.getElementById("btnNextRound").onclick = () => {
+  const r = nextRound(state);
+  state.activeRoundId = r.id;
   refresh();
 };
 
-document.querySelectorAll('.tab').forEach(btn=>{
-  btn.onclick = ()=>{
-    document.querySelectorAll('.tab,.tabBody').forEach(e=>e.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+document.getElementById("btnGeneratePairings").onclick = () => {
+  if (!state.activeRoundId) return;
+  generatePairingsForRound(state, state.activeRoundId);
+  refresh();
+};
+
+document.getElementById("btnLockRound").onclick = () => {
+  if (!state.activeRoundId) return;
+  lockRound(state, state.activeRoundId, true);
+  refresh();
+};
+
+document.getElementById("roundSelect").onchange = e => {
+  state.activeRoundId = e.target.value;
+  refresh();
+};
+
+/* ---------------- Tabs ---------------- */
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".tabBody").forEach(b => b.classList.remove("active"));
+
+    btn.classList.add("active");
+    document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
   };
 });
 
-showLanding();
+/* ---------------- Boot ---------------- */
+
+if (state.players.length > 0 || state.rounds.length > 0) {
+  showApp();
+} else {
+  showLanding();
+}
