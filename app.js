@@ -10,6 +10,9 @@ import { renderAll } from "./render.js";
 
 let state = loadState();
 
+// Holds the current landing-page recommendation until the user clicks “Build This Event”
+let pendingRecommendation = null;
+
 /* ---------------- Views ---------------- */
 
 const landing = document.getElementById("viewLanding");
@@ -29,12 +32,117 @@ function showApp() {
 /* ---------------- Refresh ---------------- */
 
 function refresh() {
-  // keep title synced
   const title = document.getElementById("eventTitle");
   if (title) title.textContent = state.meta?.name || state.name || "Event";
 
   saveState(state);
   renderAll(state);
+}
+
+/* ---------------- Landing recommendation logic ---------------- */
+
+function clampInt(v, d = 0) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : d;
+}
+
+function computeMaxRounds(hours, roundMin, breakMin) {
+  const total = clampInt(hours, 4) * 60;
+  const perRound = clampInt(roundMin, 180) + clampInt(breakMin, 10);
+  const usable = Math.max(0, total - 15); // 15 min buffer
+  return Math.max(1, Math.floor(usable / Math.max(1, perRound)));
+}
+
+// returns { format, roundsSwiss, cutSize, roundsTotal, maxRounds, reason, notes }
+function recommendFormat(players, hours, roundMin, breakMin) {
+  const P = Math.max(2, clampInt(players, 6));
+  const Rmax = computeMaxRounds(hours, roundMin, breakMin);
+
+  const rrRounds = Math.max(1, P - 1);
+  const rrFits = rrRounds <= Rmax;
+
+  // Swiss baseline: 3 for small, 4 if time and players
+  const swissRounds = Math.min(Rmax, Math.max(3, Math.ceil(Math.log2(Math.max(2, P)))));
+  const swissCandidate = {
+    format: "swiss",
+    roundsSwiss,
+    cutSize: 0,
+    roundsTotal: swissRounds,
+    maxRounds: Rmax,
+    reason: `Swiss fits: ${swissRounds} round(s) within your time cap (${Rmax} max).`,
+    notes: "Fast, store-friendly. Everyone plays the same number of games."
+  };
+
+  // Swiss + Top2 final if time for +1
+  let swissCutCandidate = null;
+  if (Rmax >= 4) {
+    const swiss = Math.max(3, Math.min(4, Rmax - 1));
+    swissCutCandidate = {
+      format: "swiss_cut",
+      roundsSwiss: swiss,
+      cutSize: 2,
+      roundsTotal: swiss + 1,
+      maxRounds: Rmax,
+      reason: `Swiss + Final fits: ${swiss} Swiss round(s) + 1 final.`,
+      notes: "Adds a clean championship match without blowing up the schedule."
+    };
+  }
+
+  // RR is best when it fully fits
+  const rrCandidate = rrFits ? {
+    format: "round_robin",
+    roundsSwiss: 0,
+    cutSize: 0,
+    roundsTotal: rrRounds,
+    maxRounds: Rmax,
+    reason: `Round Robin fits: ${rrRounds} round(s) for ${P} players.`,
+    notes: "Most fair: everyone plays everyone."
+  } : null;
+
+  // Pick best: RR if it fits, else Swiss+Final if available, else Swiss
+  // (You can tune this later, but it’s sane and predictable.)
+  if (rrCandidate) return rrCandidate;
+  if (swissCutCandidate) return swissCutCandidate;
+  return swissCandidate;
+}
+
+function applyScoringPreset(preset) {
+  if (preset === "3-1-0") return { win: 3, draw: 1, loss: 0 };
+  if (preset === "2-1-0") return { win: 2, draw: 1, loss: 0 };
+  return null;
+}
+
+function renderRecommendation(rec) {
+  const box = document.getElementById("recommendBox");
+  const text = document.getElementById("recommendText");
+  if (!box || !text) return;
+
+  const fmtLabel =
+    rec.format === "swiss" ? "Swiss" :
+    rec.format === "swiss_cut" ? "Swiss + Final (Top 2)" :
+    rec.format === "round_robin" ? "Round Robin" :
+    "Custom";
+
+  const lines = [
+    `<strong>Format:</strong> ${fmtLabel}`,
+    `<strong>Rounds:</strong> ${rec.roundsTotal} (max possible: ${rec.maxRounds})`,
+  ];
+
+  if (rec.format === "swiss_cut") {
+    lines.push(`<strong>Structure:</strong> ${rec.roundsSwiss} Swiss + 1 Final`);
+  }
+
+  lines.push(`<strong>Why:</strong> ${rec.reason}`);
+  lines.push(`<strong>Notes:</strong> ${rec.notes}`);
+
+  text.innerHTML = lines.join("<br>");
+  box.hidden = false;
+}
+
+function clearRecommendationUI() {
+  pendingRecommendation = null;
+  const box = document.getElementById("recommendBox");
+  if (box) box.hidden = true;
 }
 
 /* ---------------- Topbar actions ---------------- */
@@ -44,9 +152,7 @@ const btnExport = document.getElementById("btnExport");
 const btnWipe = document.getElementById("btnWipe");
 const fileImport = document.getElementById("fileImport");
 
-if (btnGoHome) {
-  btnGoHome.onclick = () => showLanding();
-}
+if (btnGoHome) btnGoHome.onclick = () => showLanding();
 
 if (btnExport) {
   btnExport.onclick = () => {
@@ -56,10 +162,7 @@ if (btnExport) {
 
     const a = document.createElement("a");
     const stamp = new Date().toISOString().slice(0, 10);
-    const name = (safe.meta?.name || safe.name || "40k-event")
-      .trim()
-      .replace(/[^\w\-]+/g, "_");
-
+    const name = (safe.meta?.name || safe.name || "40k-event").trim().replace(/[^\w\-]+/g, "_");
     a.href = url;
     a.download = `${name}_${stamp}.json`;
     document.body.appendChild(a);
@@ -78,6 +181,8 @@ if (fileImport) {
       const text = await f.text();
       const parsed = JSON.parse(text);
       state = migrateState(parsed);
+
+      clearRecommendationUI();
 
       const hasData =
         (state.players?.length || 0) > 0 ||
@@ -105,6 +210,8 @@ if (btnWipe) {
     localStorage.removeItem(STORAGE_KEY);
     state = defaultState();
     saveState(state);
+
+    clearRecommendationUI();
     showLanding();
   };
 }
@@ -112,27 +219,65 @@ if (btnWipe) {
 /* ---------------- Landing actions ---------------- */
 
 document.getElementById("btnRecommend").onclick = () => {
-  const name = document.getElementById("lEventName").value || "40K Event";
+  const players = document.getElementById("lPlayers").value;
+  const hours = document.getElementById("lHours").value;
+  const roundMin = document.getElementById("lRoundMin").value;
+  const breakMin = document.getElementById("lBreakMin").value;
+
+  const rec = recommendFormat(players, hours, roundMin, breakMin);
+  pendingRecommendation = rec;
+  renderRecommendation(rec);
+};
+
+document.getElementById("btnClearRecommendation").onclick = () => {
+  clearRecommendationUI();
+};
+
+document.getElementById("btnBuildRecommended").onclick = () => {
+  const name = (document.getElementById("lEventName").value || "").trim() || "40K Event";
+
+  // Build from scratch using recommendation + landing presets
+  const scoringPreset = document.getElementById("lScoringPreset").value;
+  const tieBreak = document.getElementById("lTieBreak").value;
+
+  const scoring = applyScoringPreset(scoringPreset);
+
+  state = defaultState();
   state.name = name;
   state.meta.name = name;
+  state.meta.date = new Date().toISOString().slice(0, 10);
 
-  // initialize defaults
-  state.meta.format = "swiss";
-  state.meta.useVP = true;
-  state.meta.scoring = state.meta.scoring || { win: 3, draw: 1, loss: 0 };
+  const rec = pendingRecommendation || recommendFormat(
+    document.getElementById("lPlayers").value,
+    document.getElementById("lHours").value,
+    document.getElementById("lRoundMin").value,
+    document.getElementById("lBreakMin").value
+  );
 
+  state.meta.format = rec.format;
+  state.meta.roundsPlanned = rec.format === "round_robin" ? rec.roundsTotal : (rec.roundsSwiss || rec.roundsTotal);
+  state.meta.cutSize = rec.cutSize || 0;
+  state.meta.useVP = (tieBreak === "vp");
+  if (scoring) state.meta.scoring = scoring;
+
+  clearRecommendationUI();
   showApp();
 };
 
 document.getElementById("btnCustomBuild").onclick = () => {
   const name = (document.getElementById("lEventName").value || "").trim() || "Custom 40K Event";
+  const scoringPreset = document.getElementById("lScoringPreset").value;
+  const tieBreak = document.getElementById("lTieBreak").value;
+  const scoring = applyScoringPreset(scoringPreset);
+
+  state = defaultState();
   state.name = name;
   state.meta.name = name;
-
   state.meta.format = "custom";
-  state.meta.useVP = true;
-  state.meta.scoring = state.meta.scoring || { win: 3, draw: 1, loss: 0 };
+  state.meta.useVP = (tieBreak === "vp");
+  if (scoring) state.meta.scoring = scoring;
 
+  clearRecommendationUI();
   showApp();
 };
 
@@ -153,7 +298,6 @@ document.querySelectorAll(".tab").forEach(btn => {
 document.getElementById("btnAddPlayer").onclick = () => {
   const newPlayerName = document.getElementById("newPlayerName");
   const newPlayerFaction = document.getElementById("newPlayerFaction");
-
   const n = (newPlayerName.value || "").trim();
   if (!n) return;
 
@@ -188,9 +332,8 @@ document.getElementById("btnLockRound").onclick = () => {
   const round = state.rounds.find(r => r.id === state.activeRoundId);
   if (!round) return;
 
-  // basic guard: don't lock if any non-bye match still has NONE
   const unfinished = (round.pairings || []).some(m => {
-    if (m.bId === null) return false; // bye is auto-complete
+    if (m.bId === null) return false;
     const o = (m.result?.outcome || "NONE").toUpperCase();
     return o === "NONE";
   });
@@ -209,7 +352,7 @@ document.getElementById("roundSelect").onchange = (e) => {
   refresh();
 };
 
-/* ---------------- Save Results (score entry) ---------------- */
+/* ---------------- Save Results ---------------- */
 
 const btnSaveResults = document.getElementById("btnSaveResults");
 if (btnSaveResults) {
