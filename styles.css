@@ -1,0 +1,13 @@
+body{
+  font-family: system-ui, sans-serif;
+  background:#0b0f14;
+  color:#e8eef6;
+  margin:0;
+}
+.wrap{ max-width:1000px; margin:auto; padding:16px; }
+.topbar{ display:flex; justify-content:space-between; align-items:center; }
+button{ cursor:pointer; margin:4px; }
+.tabs{ margin-top:16px; }
+.tab.active{ font-weight:bold; }
+.tabBody{ display:none; }
+.tabBody.active{ display:block; }

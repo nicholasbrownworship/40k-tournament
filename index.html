@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>40K Tournament Ops</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <h1>40K Tournament Ops</h1>
+      <div class="actions">
+        <button id="btnGoHome">Home</button>
+        <button id="btnPrint">Print</button>
+        <button id="btnExport">Export</button>
+        <input type="file" id="fileImport" hidden />
+        <button id="btnWipe">Wipe</button>
+      </div>
+    </header>
+
+    <!-- LANDING -->
+    <section id="viewLanding">
+      <h2>Build Event</h2>
+      <label>Event Name <input id="lEventName" /></label>
+      <label>Players <input id="lPlayers" type="number" value="6" /></label>
+      <label>Hours <input id="lHours" type="number" value="4" /></label>
+      <button id="btnRecommend">Recommend & Build</button>
+      <button id="btnCustomBuild">Custom Event</button>
+    </section>
+
+    <!-- APP -->
+    <section id="viewApp" hidden>
+      <h2 id="eventTitle"></h2>
+
+      <nav class="tabs">
+        <button data-tab="players" class="tab active">Players</button>
+        <button data-tab="pairings" class="tab">Pairings</button>
+        <button data-tab="standings" class="tab">Standings</button>
+      </nav>
+
+      <div class="tabBody active" id="tab-players">
+        <input id="newPlayerName" placeholder="Player name" />
+        <input id="newPlayerFaction" placeholder="Faction" />
+        <button id="btnAddPlayer">Add</button>
+        <ul id="playersList"></ul>
+      </div>
+
+      <div class="tabBody" id="tab-pairings">
+        <button id="btnNextRound">Create Round</button>
+        <div id="pairings"></div>
+      </div>
+
+      <div class="tabBody" id="tab-standings">
+        <ol id="standings"></ol>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
