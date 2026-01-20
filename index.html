@@ -8,14 +8,14 @@
 </head>
 <body>
   <div class="wrap">
-    <!-- Topbar with Export/Import/Wipe -->
+    <!-- TOP BAR -->
     <header class="topbar">
       <div class="brand">
         <h1>40K Tournament Ops</h1>
-        <p class="sub">One-page runner: players → rounds → pairings → standings.</p>
+        <p class="sub">Local-first runner: build → pair → score → standings. Export/import supported.</p>
       </div>
 
-      <div class="topActions">
+      <div class="topActions" aria-label="Top actions">
         <button class="btn" id="btnGoHome" type="button" title="Back to landing">Home</button>
 
         <button class="btn" id="btnExport" type="button" title="Download event JSON">Export</button>
@@ -56,7 +56,7 @@
         </div>
 
         <p class="muted">
-          (For now, “Recommend” builds a Swiss event. We’ll add full recommendation logic after UI is stable.)
+          Note: Recommend currently initializes a Swiss event. (We can add full recommendation logic later.)
         </p>
       </div>
     </section>
@@ -66,7 +66,7 @@
       <div class="card">
         <div class="cardHeader">
           <h2 id="eventTitle">Event</h2>
-          <div class="mutedSmall">Local-only • autosaves</div>
+          <div class="mutedSmall" id="saveHint">Autosaves locally</div>
         </div>
 
         <!-- Tabs -->
@@ -79,7 +79,7 @@
         <!-- PLAYERS TAB -->
         <section class="tabBody active" id="tab-players">
           <div class="notice">
-            Add players first. Then create a round in the Pairings tab.
+            Add players first. Then go to Pairings to create Round 1.
           </div>
 
           <div class="fieldRow">
@@ -106,7 +106,7 @@
         <!-- PAIRINGS TAB -->
         <section class="tabBody" id="tab-pairings">
           <div class="notice">
-            Create a round, generate pairings, then lock it when ready.
+            Create a round, generate pairings, then enter results (Outcome + VP) and Save Results.
           </div>
 
           <div class="pairingControls">
@@ -114,6 +114,7 @@
               <span id="roundBadge" class="badge">—</span>
               <select id="roundSelect" class="select" aria-label="Round select"></select>
             </div>
+
             <div class="right">
               <button class="btn primary" id="btnNextRound" type="button">Create Round</button>
               <button class="btn" id="btnGeneratePairings" type="button">Generate Pairings</button>
@@ -123,18 +124,24 @@
 
           <div class="hr"></div>
 
-          <h3 class="sectionTitle">Pairings</h3>
+          <h3 class="sectionTitle">Pairings &amp; Scores</h3>
           <div id="pairings" class="pairingsBox"></div>
 
+          <div class="hr"></div>
+
+          <div class="actions">
+            <button class="btn primary" id="btnSaveResults" type="button">Save Results</button>
+          </div>
+
           <p class="muted">
-            Results entry is next. Right now you’ll see pairings + current outcome status.
+            Locked rounds can’t be edited. (Unlock is not implemented yet.)
           </p>
         </section>
 
         <!-- STANDINGS TAB -->
         <section class="tabBody" id="tab-standings">
           <div class="notice">
-            Standings update from logged results. Currently shows points, record, VP and SoS.
+            Standings: Points → (optional) VP → SoS → Name.
           </div>
 
           <h3 class="sectionTitle">Standings</h3>
