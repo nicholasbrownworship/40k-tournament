@@ -1,93 +1,77 @@
-// app.js
+// app.js (diagnostic-safe)
 import { defaultState, loadState, saveState, migrateState, STORAGE_KEY } from "./state.js";
-import {
-  nextRound,
-  generatePairingsForRound,
-  lockRound,
-  setMatchResult
-} from "./tournament.js";
+import { nextRound, generatePairingsForRound, lockRound, setMatchResult } from "./tournament.js";
 import { renderAll } from "./render.js";
 
 let state = loadState();
-
-// Holds the current landing-page recommendation until the user clicks “Build This Event”
 let pendingRecommendation = null;
+
+const banner = document.getElementById("bootBanner");
+function setBanner(msg) {
+  if (banner) banner.innerHTML = msg;
+}
+
+// Catch runtime errors and show them on screen
+window.addEventListener("error", (e) => {
+  setBanner(`<strong style="color:#ff6b6b;">App error:</strong> ${escapeHtml(e.message)}<br><span style="opacity:.8;">Check Console for details.</span>`);
+});
+window.addEventListener("unhandledrejection", (e) => {
+  setBanner(`<strong style="color:#ff6b6b;">Promise error:</strong> ${escapeHtml(String(e.reason))}<br><span style="opacity:.8;">Check Console for details.</span>`);
+});
+
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>\"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+  }[m]));
+}
 
 /* ---------------- Views ---------------- */
 
 const landing = document.getElementById("viewLanding");
 const app = document.getElementById("viewApp");
 
-function showLanding() {
-  landing.hidden = false;
-  app.hidden = true;
-}
-
-function showApp() {
-  landing.hidden = true;
-  app.hidden = false;
-  refresh();
-}
-
-/* ---------------- Refresh ---------------- */
+function showLanding() { landing.hidden = false; app.hidden = true; }
+function showApp() { landing.hidden = true; app.hidden = false; refresh(); }
 
 function refresh() {
   const title = document.getElementById("eventTitle");
   if (title) title.textContent = state.meta?.name || state.name || "Event";
-
   saveState(state);
   renderAll(state);
 }
 
-/* ---------------- Landing recommendation logic ---------------- */
+/* ---------------- Recommendation ---------------- */
 
-function clampInt(v, d = 0) {
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) ? n : d;
+function clampInt(v, d=0){ const n = parseInt(v,10); return Number.isFinite(n) ? n : d; }
+
+function computeMaxRounds(hours, roundMin, breakMin){
+  const total = clampInt(hours,4) * 60;
+  const per = clampInt(roundMin,180) + clampInt(breakMin,10);
+  const usable = Math.max(0, total - 15);
+  return Math.max(1, Math.floor(usable / Math.max(1, per)));
 }
 
-function computeMaxRounds(hours, roundMin, breakMin) {
-  const total = clampInt(hours, 4) * 60;
-  const perRound = clampInt(roundMin, 180) + clampInt(breakMin, 10);
-  const usable = Math.max(0, total - 15); // buffer
-  return Math.max(1, Math.floor(usable / Math.max(1, perRound)));
-}
-
-// returns { format, roundsSwiss, cutSize, roundsTotal, maxRounds, reason, notes }
-function recommendFormat(players, hours, roundMin, breakMin) {
+function recommendFormat(players, hours, roundMin, breakMin){
   const P = Math.max(2, clampInt(players, 6));
   const Rmax = computeMaxRounds(hours, roundMin, breakMin);
 
-  // Round Robin
   const rrRounds = Math.max(1, P - 1);
   const rrFits = rrRounds <= Rmax;
-  const rrCandidate = rrFits ? {
-    format: "round_robin",
-    roundsSwiss: 0,
-    cutSize: 0,
-    roundsTotal: rrRounds,
-    maxRounds: Rmax,
-    reason: `Round Robin fits: ${rrRounds} round(s) for ${P} players.`,
-    notes: "Most fair: everyone plays everyone."
-  } : null;
+  if (rrFits) {
+    return {
+      format: "round_robin",
+      roundsSwiss: 0,
+      cutSize: 0,
+      roundsTotal: rrRounds,
+      maxRounds: Rmax,
+      reason: `Round Robin fits: ${rrRounds} round(s) for ${P} players.`,
+      notes: "Most fair: everyone plays everyone."
+    };
+  }
 
-  // Swiss baseline
-  const swissRounds = Math.min(Rmax, Math.max(3, Math.ceil(Math.log2(Math.max(2, P)))));
-  const swissCandidate = {
-    format: "swiss",
-    roundsSwiss: swissRounds,   // ✅ FIXED (was broken before)
-    cutSize: 0,
-    roundsTotal: swissRounds,
-    maxRounds: Rmax,
-    reason: `Swiss fits: ${swissRounds} round(s) within your time cap (${Rmax} max).`,
-    notes: "Fast, store-friendly. Everyone plays the same number of games."
-  };
-
-  // Swiss + Final if you have time for 1 extra
-  let swissCutCandidate = null;
   if (Rmax >= 4) {
     const swiss = Math.max(3, Math.min(4, Rmax - 1));
-    swissCutCandidate = {
+    return {
       format: "swiss_cut",
       roundsSwiss: swiss,
       cutSize: 2,
@@ -98,19 +82,25 @@ function recommendFormat(players, hours, roundMin, breakMin) {
     };
   }
 
-  // Priority: RR if it fits, else Swiss+Final if it fits, else Swiss
-  if (rrCandidate) return rrCandidate;
-  if (swissCutCandidate) return swissCutCandidate;
-  return swissCandidate;
+  const swissRounds = Math.min(Rmax, Math.max(3, Math.ceil(Math.log2(Math.max(2, P)))));
+  return {
+    format: "swiss",
+    roundsSwiss: swissRounds,
+    cutSize: 0,
+    roundsTotal: swissRounds,
+    maxRounds: Rmax,
+    reason: `Swiss fits: ${swissRounds} round(s) within your time cap (${Rmax} max).`,
+    notes: "Fast, store-friendly. Everyone plays the same number of games."
+  };
 }
 
-function applyScoringPreset(preset) {
-  if (preset === "3-1-0") return { win: 3, draw: 1, loss: 0 };
-  if (preset === "2-1-0") return { win: 2, draw: 1, loss: 0 };
+function applyScoringPreset(preset){
+  if (preset === "3-1-0") return { win:3, draw:1, loss:0 };
+  if (preset === "2-1-0") return { win:2, draw:1, loss:0 };
   return null;
 }
 
-function renderRecommendation(rec) {
+function renderRecommendation(rec){
   const box = document.getElementById("recommendBox");
   const text = document.getElementById("recommendText");
   if (!box || !text) return;
@@ -118,81 +108,67 @@ function renderRecommendation(rec) {
   const fmtLabel =
     rec.format === "swiss" ? "Swiss" :
     rec.format === "swiss_cut" ? "Swiss + Final (Top 2)" :
-    rec.format === "round_robin" ? "Round Robin" :
-    "Custom";
+    rec.format === "round_robin" ? "Round Robin" : "Custom";
 
   const lines = [
     `<strong>Format:</strong> ${fmtLabel}`,
     `<strong>Rounds:</strong> ${rec.roundsTotal} (max possible: ${rec.maxRounds})`,
-  ];
-
-  if (rec.format === "swiss_cut") {
-    lines.push(`<strong>Structure:</strong> ${rec.roundsSwiss} Swiss + 1 Final`);
-  }
-
-  lines.push(`<strong>Why:</strong> ${rec.reason}`);
-  lines.push(`<strong>Notes:</strong> ${rec.notes}`);
+    rec.format === "swiss_cut" ? `<strong>Structure:</strong> ${rec.roundsSwiss} Swiss + 1 Final` : "",
+    `<strong>Why:</strong> ${rec.reason}`,
+    `<strong>Notes:</strong> ${rec.notes}`
+  ].filter(Boolean);
 
   text.innerHTML = lines.join("<br>");
   box.hidden = false;
 }
 
-function clearRecommendationUI() {
+function clearRecommendationUI(){
   pendingRecommendation = null;
   const box = document.getElementById("recommendBox");
   if (box) box.hidden = true;
 }
 
-/* ---------------- Topbar actions ---------------- */
+/* ---------------- Wire Buttons (safe) ---------------- */
 
-const btnGoHome = document.getElementById("btnGoHome");
-const btnExport = document.getElementById("btnExport");
-const btnWipe = document.getElementById("btnWipe");
-const fileImport = document.getElementById("fileImport");
-
-if (btnGoHome) btnGoHome.onclick = () => showLanding();
-
-if (btnExport) {
-  btnExport.onclick = () => {
-    const safe = migrateState(state);
-    const blob = new Blob([JSON.stringify(safe, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    const stamp = new Date().toISOString().slice(0, 10);
-    const name = (safe.meta?.name || safe.name || "40k-event").trim().replace(/[^\w\-]+/g, "_");
-    a.href = url;
-    a.download = `${name}_${stamp}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
+function on(id, fn){
+  const el = document.getElementById(id);
+  if (el) el.onclick = fn;
 }
 
+/* Top actions */
+on("btnGoHome", () => showLanding());
+
+on("btnExport", () => {
+  const safe = migrateState(state);
+  const blob = new Blob([JSON.stringify(safe, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 10);
+  const name = (safe.meta?.name || safe.name || "40k-event").trim().replace(/[^\w\-]+/g, "_");
+  a.href = url;
+  a.download = `${name}_${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+const fileImport = document.getElementById("fileImport");
 if (fileImport) {
   fileImport.addEventListener("change", async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-
     try {
       const text = await f.text();
-      const parsed = JSON.parse(text);
-      state = migrateState(parsed);
-
+      state = migrateState(JSON.parse(text));
       clearRecommendationUI();
-
-      const hasData =
-        (state.players?.length || 0) > 0 ||
-        (state.rounds?.length || 0) > 0 ||
-        !!(state.meta?.name || state.name);
-
-      if (hasData) showApp();
-      else showLanding();
-
+      ((state.players?.length || 0) > 0 || (state.rounds?.length || 0) > 0 || !!(state.meta?.name || state.name))
+        ? showApp()
+        : showLanding();
       refresh();
     } catch (err) {
-      alert("Import failed: that file wasn’t valid JSON for this app.");
+      setBanner(`<strong style="color:#ff6b6b;">Import failed:</strong> ${escapeHtml(err.message || String(err))}`);
       console.error(err);
     } finally {
       fileImport.value = "";
@@ -200,176 +176,116 @@ if (fileImport) {
   });
 }
 
-if (btnWipe) {
-  btnWipe.onclick = () => {
-    const ok = confirm("Wipe local data? This deletes the saved event from this browser.");
-    if (!ok) return;
+on("btnWipe", () => {
+  if (!confirm("Wipe local data? This deletes the saved event from this browser.")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  state = defaultState();
+  saveState(state);
+  clearRecommendationUI();
+  showLanding();
+});
 
-    localStorage.removeItem(STORAGE_KEY);
-    state = defaultState();
-    saveState(state);
+/* Landing */
+on("btnRecommend", () => {
+  const rec = recommendFormat(
+    document.getElementById("lPlayers")?.value,
+    document.getElementById("lHours")?.value,
+    document.getElementById("lRoundMin")?.value,
+    document.getElementById("lBreakMin")?.value
+  );
+  pendingRecommendation = rec;
+  renderRecommendation(rec);
+});
 
-    clearRecommendationUI();
-    showLanding();
-  };
-}
+on("btnClearRecommendation", () => clearRecommendationUI());
 
-/* ---------------- Landing actions ---------------- */
+on("btnBuildRecommended", () => {
+  const name = (document.getElementById("lEventName")?.value || "").trim() || "40K Event";
+  const scoringPreset = document.getElementById("lScoringPreset")?.value || "3-1-0";
+  const tieBreak = document.getElementById("lTieBreak")?.value || "vp";
+  const scoring = applyScoringPreset(scoringPreset);
 
-const btnRecommend = document.getElementById("btnRecommend");
-const btnClearRecommendation = document.getElementById("btnClearRecommendation");
-const btnBuildRecommended = document.getElementById("btnBuildRecommended");
-const btnCustomBuild = document.getElementById("btnCustomBuild");
+  const rec = pendingRecommendation || recommendFormat(
+    document.getElementById("lPlayers")?.value,
+    document.getElementById("lHours")?.value,
+    document.getElementById("lRoundMin")?.value,
+    document.getElementById("lBreakMin")?.value
+  );
 
-if (btnRecommend) {
-  btnRecommend.onclick = () => {
-    const rec = recommendFormat(
-      document.getElementById("lPlayers").value,
-      document.getElementById("lHours").value,
-      document.getElementById("lRoundMin").value,
-      document.getElementById("lBreakMin").value
-    );
-    pendingRecommendation = rec;
-    renderRecommendation(rec);
-  };
-}
+  state = defaultState();
+  state.name = name;
+  state.meta.name = name;
+  state.meta.date = new Date().toISOString().slice(0, 10);
 
-if (btnClearRecommendation) {
-  btnClearRecommendation.onclick = () => clearRecommendationUI();
-}
+  state.meta.format = rec.format;
+  state.meta.roundsPlanned = rec.format === "round_robin" ? rec.roundsTotal : (rec.roundsSwiss || rec.roundsTotal);
+  state.meta.cutSize = rec.cutSize || 0;
+  state.meta.useVP = (tieBreak === "vp");
+  if (scoring) state.meta.scoring = scoring;
 
-if (btnBuildRecommended) {
-  btnBuildRecommended.onclick = () => {
-    const name = (document.getElementById("lEventName").value || "").trim() || "40K Event";
-    const scoringPreset = document.getElementById("lScoringPreset").value;
-    const tieBreak = document.getElementById("lTieBreak").value;
-    const scoring = applyScoringPreset(scoringPreset);
+  clearRecommendationUI();
+  showApp();
+});
 
-    const rec = pendingRecommendation || recommendFormat(
-      document.getElementById("lPlayers").value,
-      document.getElementById("lHours").value,
-      document.getElementById("lRoundMin").value,
-      document.getElementById("lBreakMin").value
-    );
+on("btnCustomBuild", () => {
+  const name = (document.getElementById("lEventName")?.value || "").trim() || "Custom 40K Event";
+  const scoringPreset = document.getElementById("lScoringPreset")?.value || "3-1-0";
+  const tieBreak = document.getElementById("lTieBreak")?.value || "vp";
+  const scoring = applyScoringPreset(scoringPreset);
 
-    state = defaultState();
-    state.name = name;
-    state.meta.name = name;
-    state.meta.date = new Date().toISOString().slice(0, 10);
+  state = defaultState();
+  state.name = name;
+  state.meta.name = name;
+  state.meta.format = "custom";
+  state.meta.useVP = (tieBreak === "vp");
+  if (scoring) state.meta.scoring = scoring;
 
-    state.meta.format = rec.format;
-    state.meta.roundsPlanned = rec.format === "round_robin"
-      ? rec.roundsTotal
-      : (rec.roundsSwiss || rec.roundsTotal);
+  clearRecommendationUI();
+  showApp();
+});
 
-    state.meta.cutSize = rec.cutSize || 0;
-    state.meta.useVP = (tieBreak === "vp");
-    if (scoring) state.meta.scoring = scoring;
-
-    clearRecommendationUI();
-    showApp();
-  };
-}
-
-if (btnCustomBuild) {
-  btnCustomBuild.onclick = () => {
-    const name = (document.getElementById("lEventName").value || "").trim() || "Custom 40K Event";
-    const scoringPreset = document.getElementById("lScoringPreset").value;
-    const tieBreak = document.getElementById("lTieBreak").value;
-    const scoring = applyScoringPreset(scoringPreset);
-
-    state = defaultState();
-    state.name = name;
-    state.meta.name = name;
-    state.meta.format = "custom";
-    state.meta.useVP = (tieBreak === "vp");
-    if (scoring) state.meta.scoring = scoring;
-
-    clearRecommendationUI();
-    showApp();
-  };
-}
-
-/* ---------------- Tabs ---------------- */
-
+/* Tabs */
 document.querySelectorAll(".tab").forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
     document.querySelectorAll(".tabBody").forEach(b => b.classList.remove("active"));
-
     btn.classList.add("active");
-    document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+    const target = document.getElementById("tab-" + btn.dataset.tab);
+    if (target) target.classList.add("active");
   };
 });
 
-/* ---------------- Players ---------------- */
+/* Players */
+on("btnAddPlayer", () => {
+  const n = (document.getElementById("newPlayerName")?.value || "").trim();
+  if (!n) return;
+  const f = (document.getElementById("newPlayerFaction")?.value || "").trim();
+  state.players.push({ id: crypto.randomUUID(), name: n, faction: f });
+  document.getElementById("newPlayerName").value = "";
+  document.getElementById("newPlayerFaction").value = "";
+  refresh();
+});
 
-const btnAddPlayer = document.getElementById("btnAddPlayer");
-if (btnAddPlayer) {
-  btnAddPlayer.onclick = () => {
-    const newPlayerName = document.getElementById("newPlayerName");
-    const newPlayerFaction = document.getElementById("newPlayerFaction");
-    const n = (newPlayerName.value || "").trim();
-    if (!n) return;
+/* Rounds */
+on("btnNextRound", () => {
+  const r = nextRound(state);
+  state.activeRoundId = r.id;
+  refresh();
+});
 
-    state.players.push({
-      id: crypto.randomUUID(),
-      name: n,
-      faction: (newPlayerFaction.value || "").trim(),
-    });
+on("btnGeneratePairings", () => {
+  if (!state.activeRoundId) return;
+  generatePairingsForRound(state, state.activeRoundId);
+  refresh();
+});
 
-    newPlayerName.value = "";
-    newPlayerFaction.value = "";
-    refresh();
-  };
-}
+on("btnLockRound", () => {
+  if (!state.activeRoundId) return;
+  lockRound(state, state.activeRoundId, true);
+  refresh();
+});
 
-/* ---------------- Rounds ---------------- */
-
-const btnNextRound = document.getElementById("btnNextRound");
-const btnGeneratePairings = document.getElementById("btnGeneratePairings");
-const btnLockRound = document.getElementById("btnLockRound");
 const roundSelect = document.getElementById("roundSelect");
-
-if (btnNextRound) {
-  btnNextRound.onclick = () => {
-    const r = nextRound(state);
-    state.activeRoundId = r.id;
-    refresh();
-  };
-}
-
-if (btnGeneratePairings) {
-  btnGeneratePairings.onclick = () => {
-    if (!state.activeRoundId) return;
-    generatePairingsForRound(state, state.activeRoundId);
-    refresh();
-  };
-}
-
-if (btnLockRound) {
-  btnLockRound.onclick = () => {
-    if (!state.activeRoundId) return;
-
-    const round = state.rounds.find(r => r.id === state.activeRoundId);
-    if (!round) return;
-
-    const unfinished = (round.pairings || []).some(m => {
-      if (m.bId === null) return false;
-      const o = (m.result?.outcome || "NONE").toUpperCase();
-      return o === "NONE";
-    });
-
-    if (unfinished) {
-      const ok = confirm("Some matches are still marked as NONE. Lock anyway?");
-      if (!ok) return;
-    }
-
-    lockRound(state, state.activeRoundId, true);
-    refresh();
-  };
-}
-
 if (roundSelect) {
   roundSelect.onchange = (e) => {
     state.activeRoundId = e.target.value;
@@ -377,47 +293,32 @@ if (roundSelect) {
   };
 }
 
-/* ---------------- Save Results ---------------- */
+/* Save Results */
+on("btnSaveResults", () => {
+  if (!state.activeRoundId) return;
+  const round = state.rounds.find(r => r.id === state.activeRoundId);
+  if (!round) return;
+  if (round.locked) return alert("That round is locked.");
 
-const btnSaveResults = document.getElementById("btnSaveResults");
-if (btnSaveResults) {
-  btnSaveResults.onclick = () => {
-    if (!state.activeRoundId) return;
+  const rows = Array.from(document.querySelectorAll("#pairings .pairingRow"));
+  for (const row of rows) {
+    const matchId = row.dataset.matchId;
+    if (!matchId) continue;
 
-    const round = state.rounds.find(r => r.id === state.activeRoundId);
-    if (!round) return;
+    const outcome = row.querySelector('[data-field="outcome"]')?.value || "NONE";
+    const aVP = parseInt(row.querySelector('[data-field="aVP"]')?.value || "0", 10);
+    const bVP = parseInt(row.querySelector('[data-field="bVP"]')?.value || "0", 10);
 
-    if (round.locked) {
-      alert("That round is locked. Unlocking is not implemented yet.");
-      return;
-    }
+    setMatchResult(state, state.activeRoundId, matchId, outcome, aVP, bVP);
+  }
+  refresh();
+});
 
-    const rows = Array.from(document.querySelectorAll("#pairings .pairingRow"));
-    for (const row of rows) {
-      const matchId = row.dataset.matchId;
-      if (!matchId) continue;
-
-      const outcomeSel = row.querySelector('[data-field="outcome"]');
-      const aVPInput = row.querySelector('[data-field="aVP"]');
-      const bVPInput = row.querySelector('[data-field="bVP"]');
-
-      const outcome = outcomeSel ? outcomeSel.value : "NONE";
-      const aVP = aVPInput ? parseInt(aVPInput.value || "0", 10) : 0;
-      const bVP = bVPInput ? parseInt(bVPInput.value || "0", 10) : 0;
-
-      setMatchResult(state, state.activeRoundId, matchId, outcome, aVP, bVP);
-    }
-
-    refresh();
-  };
-}
-
-/* ---------------- Boot ---------------- */
-
+/* Boot */
+setBanner(`<strong style="color:#2bd4a6;">JS Loaded.</strong> If buttons don’t work, this banner would NOT change.`);
 const hasData =
   (state.players?.length || 0) > 0 ||
   (state.rounds?.length || 0) > 0 ||
   !!(state.meta?.name || state.name);
 
-if (hasData) showApp();
-else showLanding();
+hasData ? showApp() : showLanding();
