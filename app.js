@@ -49,7 +49,7 @@ function clampInt(v, d = 0) {
 function computeMaxRounds(hours, roundMin, breakMin) {
   const total = clampInt(hours, 4) * 60;
   const perRound = clampInt(roundMin, 180) + clampInt(breakMin, 10);
-  const usable = Math.max(0, total - 15); // 15 min buffer
+  const usable = Math.max(0, total - 15); // buffer
   return Math.max(1, Math.floor(usable / Math.max(1, perRound)));
 }
 
@@ -58,14 +58,24 @@ function recommendFormat(players, hours, roundMin, breakMin) {
   const P = Math.max(2, clampInt(players, 6));
   const Rmax = computeMaxRounds(hours, roundMin, breakMin);
 
+  // Round Robin
   const rrRounds = Math.max(1, P - 1);
   const rrFits = rrRounds <= Rmax;
+  const rrCandidate = rrFits ? {
+    format: "round_robin",
+    roundsSwiss: 0,
+    cutSize: 0,
+    roundsTotal: rrRounds,
+    maxRounds: Rmax,
+    reason: `Round Robin fits: ${rrRounds} round(s) for ${P} players.`,
+    notes: "Most fair: everyone plays everyone."
+  } : null;
 
-  // Swiss baseline: 3 for small, 4 if time and players
+  // Swiss baseline
   const swissRounds = Math.min(Rmax, Math.max(3, Math.ceil(Math.log2(Math.max(2, P)))));
   const swissCandidate = {
     format: "swiss",
-    roundsSwiss,
+    roundsSwiss: swissRounds,   // ✅ FIXED (was broken before)
     cutSize: 0,
     roundsTotal: swissRounds,
     maxRounds: Rmax,
@@ -73,7 +83,7 @@ function recommendFormat(players, hours, roundMin, breakMin) {
     notes: "Fast, store-friendly. Everyone plays the same number of games."
   };
 
-  // Swiss + Top2 final if time for +1
+  // Swiss + Final if you have time for 1 extra
   let swissCutCandidate = null;
   if (Rmax >= 4) {
     const swiss = Math.max(3, Math.min(4, Rmax - 1));
@@ -88,19 +98,7 @@ function recommendFormat(players, hours, roundMin, breakMin) {
     };
   }
 
-  // RR is best when it fully fits
-  const rrCandidate = rrFits ? {
-    format: "round_robin",
-    roundsSwiss: 0,
-    cutSize: 0,
-    roundsTotal: rrRounds,
-    maxRounds: Rmax,
-    reason: `Round Robin fits: ${rrRounds} round(s) for ${P} players.`,
-    notes: "Most fair: everyone plays everyone."
-  } : null;
-
-  // Pick best: RR if it fits, else Swiss+Final if available, else Swiss
-  // (You can tune this later, but it’s sane and predictable.)
+  // Priority: RR if it fits, else Swiss+Final if it fits, else Swiss
   if (rrCandidate) return rrCandidate;
   if (swissCutCandidate) return swissCutCandidate;
   return swissCandidate;
@@ -218,68 +216,79 @@ if (btnWipe) {
 
 /* ---------------- Landing actions ---------------- */
 
-document.getElementById("btnRecommend").onclick = () => {
-  const players = document.getElementById("lPlayers").value;
-  const hours = document.getElementById("lHours").value;
-  const roundMin = document.getElementById("lRoundMin").value;
-  const breakMin = document.getElementById("lBreakMin").value;
+const btnRecommend = document.getElementById("btnRecommend");
+const btnClearRecommendation = document.getElementById("btnClearRecommendation");
+const btnBuildRecommended = document.getElementById("btnBuildRecommended");
+const btnCustomBuild = document.getElementById("btnCustomBuild");
 
-  const rec = recommendFormat(players, hours, roundMin, breakMin);
-  pendingRecommendation = rec;
-  renderRecommendation(rec);
-};
+if (btnRecommend) {
+  btnRecommend.onclick = () => {
+    const rec = recommendFormat(
+      document.getElementById("lPlayers").value,
+      document.getElementById("lHours").value,
+      document.getElementById("lRoundMin").value,
+      document.getElementById("lBreakMin").value
+    );
+    pendingRecommendation = rec;
+    renderRecommendation(rec);
+  };
+}
 
-document.getElementById("btnClearRecommendation").onclick = () => {
-  clearRecommendationUI();
-};
+if (btnClearRecommendation) {
+  btnClearRecommendation.onclick = () => clearRecommendationUI();
+}
 
-document.getElementById("btnBuildRecommended").onclick = () => {
-  const name = (document.getElementById("lEventName").value || "").trim() || "40K Event";
+if (btnBuildRecommended) {
+  btnBuildRecommended.onclick = () => {
+    const name = (document.getElementById("lEventName").value || "").trim() || "40K Event";
+    const scoringPreset = document.getElementById("lScoringPreset").value;
+    const tieBreak = document.getElementById("lTieBreak").value;
+    const scoring = applyScoringPreset(scoringPreset);
 
-  // Build from scratch using recommendation + landing presets
-  const scoringPreset = document.getElementById("lScoringPreset").value;
-  const tieBreak = document.getElementById("lTieBreak").value;
+    const rec = pendingRecommendation || recommendFormat(
+      document.getElementById("lPlayers").value,
+      document.getElementById("lHours").value,
+      document.getElementById("lRoundMin").value,
+      document.getElementById("lBreakMin").value
+    );
 
-  const scoring = applyScoringPreset(scoringPreset);
+    state = defaultState();
+    state.name = name;
+    state.meta.name = name;
+    state.meta.date = new Date().toISOString().slice(0, 10);
 
-  state = defaultState();
-  state.name = name;
-  state.meta.name = name;
-  state.meta.date = new Date().toISOString().slice(0, 10);
+    state.meta.format = rec.format;
+    state.meta.roundsPlanned = rec.format === "round_robin"
+      ? rec.roundsTotal
+      : (rec.roundsSwiss || rec.roundsTotal);
 
-  const rec = pendingRecommendation || recommendFormat(
-    document.getElementById("lPlayers").value,
-    document.getElementById("lHours").value,
-    document.getElementById("lRoundMin").value,
-    document.getElementById("lBreakMin").value
-  );
+    state.meta.cutSize = rec.cutSize || 0;
+    state.meta.useVP = (tieBreak === "vp");
+    if (scoring) state.meta.scoring = scoring;
 
-  state.meta.format = rec.format;
-  state.meta.roundsPlanned = rec.format === "round_robin" ? rec.roundsTotal : (rec.roundsSwiss || rec.roundsTotal);
-  state.meta.cutSize = rec.cutSize || 0;
-  state.meta.useVP = (tieBreak === "vp");
-  if (scoring) state.meta.scoring = scoring;
+    clearRecommendationUI();
+    showApp();
+  };
+}
 
-  clearRecommendationUI();
-  showApp();
-};
+if (btnCustomBuild) {
+  btnCustomBuild.onclick = () => {
+    const name = (document.getElementById("lEventName").value || "").trim() || "Custom 40K Event";
+    const scoringPreset = document.getElementById("lScoringPreset").value;
+    const tieBreak = document.getElementById("lTieBreak").value;
+    const scoring = applyScoringPreset(scoringPreset);
 
-document.getElementById("btnCustomBuild").onclick = () => {
-  const name = (document.getElementById("lEventName").value || "").trim() || "Custom 40K Event";
-  const scoringPreset = document.getElementById("lScoringPreset").value;
-  const tieBreak = document.getElementById("lTieBreak").value;
-  const scoring = applyScoringPreset(scoringPreset);
+    state = defaultState();
+    state.name = name;
+    state.meta.name = name;
+    state.meta.format = "custom";
+    state.meta.useVP = (tieBreak === "vp");
+    if (scoring) state.meta.scoring = scoring;
 
-  state = defaultState();
-  state.name = name;
-  state.meta.name = name;
-  state.meta.format = "custom";
-  state.meta.useVP = (tieBreak === "vp");
-  if (scoring) state.meta.scoring = scoring;
-
-  clearRecommendationUI();
-  showApp();
-};
+    clearRecommendationUI();
+    showApp();
+  };
+}
 
 /* ---------------- Tabs ---------------- */
 
@@ -295,62 +304,78 @@ document.querySelectorAll(".tab").forEach(btn => {
 
 /* ---------------- Players ---------------- */
 
-document.getElementById("btnAddPlayer").onclick = () => {
-  const newPlayerName = document.getElementById("newPlayerName");
-  const newPlayerFaction = document.getElementById("newPlayerFaction");
-  const n = (newPlayerName.value || "").trim();
-  if (!n) return;
+const btnAddPlayer = document.getElementById("btnAddPlayer");
+if (btnAddPlayer) {
+  btnAddPlayer.onclick = () => {
+    const newPlayerName = document.getElementById("newPlayerName");
+    const newPlayerFaction = document.getElementById("newPlayerFaction");
+    const n = (newPlayerName.value || "").trim();
+    if (!n) return;
 
-  state.players.push({
-    id: crypto.randomUUID(),
-    name: n,
-    faction: (newPlayerFaction.value || "").trim(),
-  });
+    state.players.push({
+      id: crypto.randomUUID(),
+      name: n,
+      faction: (newPlayerFaction.value || "").trim(),
+    });
 
-  newPlayerName.value = "";
-  newPlayerFaction.value = "";
-  refresh();
-};
+    newPlayerName.value = "";
+    newPlayerFaction.value = "";
+    refresh();
+  };
+}
 
 /* ---------------- Rounds ---------------- */
 
-document.getElementById("btnNextRound").onclick = () => {
-  const r = nextRound(state);
-  state.activeRoundId = r.id;
-  refresh();
-};
+const btnNextRound = document.getElementById("btnNextRound");
+const btnGeneratePairings = document.getElementById("btnGeneratePairings");
+const btnLockRound = document.getElementById("btnLockRound");
+const roundSelect = document.getElementById("roundSelect");
 
-document.getElementById("btnGeneratePairings").onclick = () => {
-  if (!state.activeRoundId) return;
-  generatePairingsForRound(state, state.activeRoundId);
-  refresh();
-};
+if (btnNextRound) {
+  btnNextRound.onclick = () => {
+    const r = nextRound(state);
+    state.activeRoundId = r.id;
+    refresh();
+  };
+}
 
-document.getElementById("btnLockRound").onclick = () => {
-  if (!state.activeRoundId) return;
+if (btnGeneratePairings) {
+  btnGeneratePairings.onclick = () => {
+    if (!state.activeRoundId) return;
+    generatePairingsForRound(state, state.activeRoundId);
+    refresh();
+  };
+}
 
-  const round = state.rounds.find(r => r.id === state.activeRoundId);
-  if (!round) return;
+if (btnLockRound) {
+  btnLockRound.onclick = () => {
+    if (!state.activeRoundId) return;
 
-  const unfinished = (round.pairings || []).some(m => {
-    if (m.bId === null) return false;
-    const o = (m.result?.outcome || "NONE").toUpperCase();
-    return o === "NONE";
-  });
+    const round = state.rounds.find(r => r.id === state.activeRoundId);
+    if (!round) return;
 
-  if (unfinished) {
-    const ok = confirm("Some matches are still marked as NONE. Lock anyway?");
-    if (!ok) return;
-  }
+    const unfinished = (round.pairings || []).some(m => {
+      if (m.bId === null) return false;
+      const o = (m.result?.outcome || "NONE").toUpperCase();
+      return o === "NONE";
+    });
 
-  lockRound(state, state.activeRoundId, true);
-  refresh();
-};
+    if (unfinished) {
+      const ok = confirm("Some matches are still marked as NONE. Lock anyway?");
+      if (!ok) return;
+    }
 
-document.getElementById("roundSelect").onchange = (e) => {
-  state.activeRoundId = e.target.value;
-  refresh();
-};
+    lockRound(state, state.activeRoundId, true);
+    refresh();
+  };
+}
+
+if (roundSelect) {
+  roundSelect.onchange = (e) => {
+    state.activeRoundId = e.target.value;
+    refresh();
+  };
+}
 
 /* ---------------- Save Results ---------------- */
 
