@@ -1,4 +1,4 @@
-// app.js (diagnostic-safe)
+// app.js (diagnostic-safe + delete round)
 import { defaultState, loadState, saveState, migrateState, STORAGE_KEY } from "./state.js";
 import { nextRound, generatePairingsForRound, lockRound, setMatchResult } from "./tournament.js";
 import { renderAll } from "./render.js";
@@ -7,9 +7,7 @@ let state = loadState();
 let pendingRecommendation = null;
 
 const banner = document.getElementById("bootBanner");
-function setBanner(msg) {
-  if (banner) banner.innerHTML = msg;
-}
+function setBanner(msg) { if (banner) banner.innerHTML = msg; }
 
 // Catch runtime errors and show them on screen
 window.addEventListener("error", (e) => {
@@ -26,10 +24,8 @@ function escapeHtml(str) {
 }
 
 /* ---------------- Views ---------------- */
-
 const landing = document.getElementById("viewLanding");
 const app = document.getElementById("viewApp");
-
 function showLanding() { landing.hidden = false; app.hidden = true; }
 function showApp() { landing.hidden = true; app.hidden = false; refresh(); }
 
@@ -41,7 +37,6 @@ function refresh() {
 }
 
 /* ---------------- Recommendation ---------------- */
-
 function clampInt(v, d=0){ const n = parseInt(v,10); return Number.isFinite(n) ? n : d; }
 
 function computeMaxRounds(hours, roundMin, breakMin){
@@ -128,21 +123,43 @@ function clearRecommendationUI(){
   if (box) box.hidden = true;
 }
 
-/* ---------------- Wire Buttons (safe) ---------------- */
-
+/* ---------------- Utilities ---------------- */
 function on(id, fn){
   const el = document.getElementById(id);
   if (el) el.onclick = fn;
 }
 
-/* Top actions */
+function hasAnyResults(round){
+  // counts any scored outcome besides NONE; BYE is considered "result" too
+  return (round?.pairings || []).some(m => {
+    const o = (m?.result?.outcome || "NONE").toUpperCase();
+    return o !== "NONE";
+  });
+}
+
+function deleteRoundById(roundId){
+  const idx = state.rounds.findIndex(r => r.id === roundId);
+  if (idx === -1) return false;
+
+  // remove it
+  state.rounds.splice(idx, 1);
+
+  // if active was deleted, choose a sensible new active
+  if (state.activeRoundId === roundId) {
+    const newActive = state.rounds[idx - 1] || state.rounds[idx] || null;
+    state.activeRoundId = newActive ? newActive.id : null;
+  }
+
+  return true;
+}
+
+/* ---------------- Top actions ---------------- */
 on("btnGoHome", () => showLanding());
 
 on("btnExport", () => {
   const safe = migrateState(state);
   const blob = new Blob([JSON.stringify(safe, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-
   const a = document.createElement("a");
   const stamp = new Date().toISOString().slice(0, 10);
   const name = (safe.meta?.name || safe.name || "40k-event").trim().replace(/[^\w\-]+/g, "_");
@@ -185,7 +202,7 @@ on("btnWipe", () => {
   showLanding();
 });
 
-/* Landing */
+/* ---------------- Landing ---------------- */
 on("btnRecommend", () => {
   const rec = recommendFormat(
     document.getElementById("lPlayers")?.value,
@@ -244,7 +261,7 @@ on("btnCustomBuild", () => {
   showApp();
 });
 
-/* Tabs */
+/* ---------------- Tabs ---------------- */
 document.querySelectorAll(".tab").forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -255,7 +272,7 @@ document.querySelectorAll(".tab").forEach(btn => {
   };
 });
 
-/* Players */
+/* ---------------- Players ---------------- */
 on("btnAddPlayer", () => {
   const n = (document.getElementById("newPlayerName")?.value || "").trim();
   if (!n) return;
@@ -266,7 +283,7 @@ on("btnAddPlayer", () => {
   refresh();
 });
 
-/* Rounds */
+/* ---------------- Rounds ---------------- */
 on("btnNextRound", () => {
   const r = nextRound(state);
   state.activeRoundId = r.id;
@@ -293,7 +310,35 @@ if (roundSelect) {
   };
 }
 
-/* Save Results */
+/* ---------------- Delete Round ---------------- */
+on("btnDeleteRound", () => {
+  if (!state.activeRoundId) {
+    alert("No round selected to delete.");
+    return;
+  }
+
+  const round = state.rounds.find(r => r.id === state.activeRoundId);
+  if (!round) return;
+
+  const label = round.label || "this round";
+  const hasResults = hasAnyResults(round);
+
+  if (round.locked) {
+    const ok = confirm(`"${label}" is LOCKED. Delete it anyway? This cannot be undone.`);
+    if (!ok) return;
+  } else if (hasResults) {
+    const ok = confirm(`"${label}" has results entered. Delete it anyway? This will change standings.`);
+    if (!ok) return;
+  } else {
+    const ok = confirm(`Delete "${label}"?`);
+    if (!ok) return;
+  }
+
+  deleteRoundById(round.id);
+  refresh();
+});
+
+/* ---------------- Save Results ---------------- */
 on("btnSaveResults", () => {
   if (!state.activeRoundId) return;
   const round = state.rounds.find(r => r.id === state.activeRoundId);
@@ -314,8 +359,8 @@ on("btnSaveResults", () => {
   refresh();
 });
 
-/* Boot */
-setBanner(`<strong style="color:#2bd4a6;">JS Loaded.</strong> If buttons don’t work, this banner would NOT change.`);
+/* ---------------- Boot ---------------- */
+setBanner(`<strong style="color:#2bd4a6;">JS Loaded.</strong>`);
 const hasData =
   (state.players?.length || 0) > 0 ||
   (state.rounds?.length || 0) > 0 ||
