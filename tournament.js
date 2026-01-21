@@ -1,15 +1,14 @@
 // tournament.js
 /**
  * Core tournament engine
- * - Swiss: pairs by standings, soft avoids repeats, fair byes
+ * - Swiss: Round 1 = RANDOM, later rounds = standings-based, soft avoids repeats, fair byes
  * - Round Robin: circle method schedule, locked once generated
  * - Standings: points → (optional) VP → SoS → name
  * - Cut helpers included (seeding)
  *
  * IMPORTANT:
  * - Creating a round DOES NOT generate pairings.
- * - Pairings are generated ONLY when generatePairingsForRound(...) is called
- *   (i.e., when the user clicks "Generate Pairings").
+ * - Pairings are generated ONLY when generatePairingsForRound(...) is called.
  */
 
 export function standings(state) {
@@ -17,7 +16,7 @@ export function standings(state) {
 }
 
 /**
- * Backward-compatible helper used by your current app.js:
+ * Backward-compatible helper used by your app.js:
  * Creates a new round ONLY (no pairings).
  */
 export function nextRound(state) {
@@ -27,7 +26,7 @@ export function nextRound(state) {
 }
 
 /** -----------------------------
- * Public API for app wiring
+ * Public API
  * ------------------------------ */
 
 export function createNextRound(state, opts = {}) {
@@ -43,7 +42,6 @@ export function createNextRound(state, opts = {}) {
     locked: false,
     isCut,
     pairings: [],
-    // For cut rounds we can freeze seeds when created
     cutSeeds: null, // { cutSize, seeds:[playerId,...] }
   };
 
@@ -52,22 +50,38 @@ export function createNextRound(state, opts = {}) {
   return round;
 }
 
+/**
+ * Generate pairings for a round.
+ * - If pairings already exist and look complete, do nothing.
+ * - If pairings exist but are clearly incomplete (ex: 1 pairing when you have 6 players),
+ *   and there are no entered results, we will overwrite and generate the full field.
+ */
 export function generatePairingsForRound(state, roundId) {
   const round = getRound(state, roundId);
   if (!round) return null;
   if (round.locked) return round;
 
-  // Don’t regenerate if already has pairings (unless empty)
-  if (Array.isArray(round.pairings) && round.pairings.length > 0) return round;
+  const playerCount = (state.players || []).length;
+  const expected = Math.ceil(playerCount / 2); // includes BYE pairing if odd
+
+  const existing = Array.isArray(round.pairings) ? round.pairings : [];
+  const hasResults = existing.some(m => (m?.result?.outcome || "NONE").toUpperCase() !== "NONE");
+
+  // If already complete, do nothing
+  if (existing.length >= expected && expected > 0) return round;
+
+  // If incomplete but results already entered, do NOT overwrite (protect data)
+  if (existing.length > 0 && hasResults) return round;
+
+  // Otherwise: safe to (re)generate full field
+  round.pairings = [];
 
   const format = (state.meta?.format || "swiss").toLowerCase();
 
   // Cut rounds (or swiss_cut format) can seed bracket if cutSize >= 2
   if (round.isCut || format === "swiss_cut") {
     const cutSize = clampInt(state.meta?.cutSize, 0);
-    if (cutSize >= 2) {
-      return seedAndBuildCutRound(state, round, cutSize);
-    }
+    if (cutSize >= 2) return seedAndBuildCutRound(state, round, cutSize);
     // fallback to swiss if no cut
   }
 
@@ -115,14 +129,11 @@ export function setMatchResult(state, roundId, matchId, outcome, aVP = 0, bVP = 
     bVP: clampInt(bVP, 0),
   };
 
-  // If this is a BYE match, ensure bId is null and outcome BYE
-  if (m.bId === null) {
-    m.result.outcome = "BYE";
-  }
+  if (m.bId === null) m.result.outcome = "BYE";
 }
 
 /** -----------------------------
- * Standings + stats
+ * Standings
  * ------------------------------ */
 
 export function computeStandings(state) {
@@ -137,7 +148,6 @@ export function computeStandings(state) {
   const lossPts = clampInt(state.meta?.scoring?.loss, 0);
   const useVP = !!state.meta?.useVP;
 
-  // Init stats map
   const stats = new Map();
   for (const p of players) {
     stats.set(p.id, {
@@ -154,7 +164,6 @@ export function computeStandings(state) {
     });
   }
 
-  // Apply results for ALL rounds (cut rounds included by default; you can exclude later if desired)
   for (const rnd of (state.rounds || [])) {
     for (const match of (rnd.pairings || [])) {
       if (!match?.aId) continue;
@@ -218,7 +227,6 @@ export function computeStandings(state) {
     return x.name.localeCompare(y.name);
   });
 
-  // Add rank + opponents (names) convenience fields
   const nameById = new Map(players.map(p => [p.id, p.name]));
   return list.map((s, idx) => ({
     ...s,
@@ -232,9 +240,7 @@ export function matchupHistory(state) {
   const set = new Set();
   for (const rnd of (state.rounds || [])) {
     for (const m of (rnd.pairings || [])) {
-      if (m?.aId && m?.bId) {
-        set.add(pairKey(m.aId, m.bId));
-      }
+      if (m?.aId && m?.bId) set.add(pairKey(m.aId, m.bId));
     }
   }
   return set;
@@ -245,14 +251,21 @@ function pairKey(aId, bId) {
 }
 
 /** -----------------------------
- * Swiss pairing (soft avoid repeats)
+ * Swiss pairing
  * ------------------------------ */
 
 function buildSwissRound(state, round) {
-  const ordered = computeStandings(state).map(s => s.id); // standings order
+  const playerIds = (state.players || []).map(p => p.id);
+
+  // Round 1: random pairings (not alphabetical standings)
+  if (round.number === 1 && !round.isCut) {
+    return buildRandomRound(state, round, playerIds);
+  }
+
+  // Later rounds: standings order
+  const ordered = computeStandings(state).map(s => s.id);
   const played = matchupHistory(state);
 
-  // Choose bye if odd
   let ids = [...ordered];
   let byeId = null;
 
@@ -263,7 +276,6 @@ function buildSwissRound(state, round) {
 
   const pairs = swissPair(ids, played);
 
-  // Build matches
   const pairings = [];
   let table = 1;
 
@@ -279,11 +291,50 @@ function buildSwissRound(state, round) {
   }
 
   if (byeId) {
-    // Track bye history
     ensureByeHistory(state);
-    if (!state.history.byePlayerIds.includes(byeId)) {
-      state.history.byePlayerIds.push(byeId);
-    }
+    if (!state.history.byePlayerIds.includes(byeId)) state.history.byePlayerIds.push(byeId);
+
+    pairings.push({
+      id: uid(),
+      table,
+      aId: byeId,
+      bId: null,
+      result: { outcome: "BYE", aVP: 0, bVP: 0 },
+    });
+  }
+
+  round.pairings = pairings;
+  return round;
+}
+
+function buildRandomRound(state, round, ids) {
+  let pool = shuffle([...ids]);
+  let byeId = null;
+
+  if (pool.length % 2 === 1) {
+    // For round 1 random: give BYE randomly too (or use fair bye history if you prefer)
+    byeId = pool.pop();
+  }
+
+  const pairings = [];
+  let table = 1;
+
+  while (pool.length >= 2) {
+    const aId = pool.shift();
+    const bId = pool.shift();
+    pairings.push({
+      id: uid(),
+      table,
+      aId,
+      bId,
+      result: { outcome: "NONE", aVP: 0, bVP: 0 },
+    });
+    table++;
+  }
+
+  if (byeId) {
+    ensureByeHistory(state);
+    if (!state.history.byePlayerIds.includes(byeId)) state.history.byePlayerIds.push(byeId);
 
     pairings.push({
       id: uid(),
@@ -299,22 +350,18 @@ function buildSwissRound(state, round) {
 }
 
 function chooseSwissBye(state, orderedIds) {
-  // Fair bye: prefer lowest-ranked who hasn't had a bye yet; soft rule
   ensureByeHistory(state);
   const hadBye = new Set(state.history.byePlayerIds || []);
 
+  // Prefer lowest-ranked who hasn't had a bye yet
   for (let i = orderedIds.length - 1; i >= 0; i--) {
     const id = orderedIds[i];
     if (!hadBye.has(id)) return id;
   }
-  // Everyone has had one -> just lowest-ranked
   return orderedIds[orderedIds.length - 1] || null;
 }
 
 function swissPair(ids, playedSet) {
-  // Soft avoid repeats:
-  // Greedy: for each player in order, pick the first opponent they haven't played.
-  // If none available, allow a repeat (best effort).
   const remaining = [...ids];
   const pairs = [];
 
@@ -322,18 +369,12 @@ function swissPair(ids, playedSet) {
     const a = remaining.shift();
     let idx = -1;
 
-    // Prefer opponent not previously played
     for (let i = 0; i < remaining.length; i++) {
       const b = remaining[i];
-      if (!playedSet.has(pairKey(a, b))) {
-        idx = i;
-        break;
-      }
+      if (!playedSet.has(pairKey(a, b))) { idx = i; break; }
     }
 
-    // If none, allow repeat (soft)
     if (idx === -1) idx = 0;
-
     const b = remaining.splice(idx, 1)[0];
     pairs.push([a, b]);
   }
@@ -346,13 +387,21 @@ function ensureByeHistory(state) {
   if (!Array.isArray(state.history.byePlayerIds)) state.history.byePlayerIds = [];
 }
 
+function shuffle(arr) {
+  // Fisher–Yates
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 /** -----------------------------
- * Round Robin schedule (circle method)
+ * Round Robin schedule
  * ------------------------------ */
 
 export function ensureRoundRobinSchedule(state) {
   if (!state.rr) state.rr = { scheduleLocked: false, schedule: null };
-
   if (state.rr.scheduleLocked && state.rr.schedule) return state.rr.schedule;
 
   const ids = (state.players || []).map(p => p.id);
@@ -365,15 +414,12 @@ export function ensureRoundRobinSchedule(state) {
 
 function buildRoundRobinSchedule(playerIds) {
   const ids = [...playerIds];
-
-  // If odd, add BYE (null)
   if (ids.length % 2 === 1) ids.push(null);
 
   const n = ids.length;
   const rounds = n - 1;
   const half = n / 2;
 
-  // circle method: fix first, rotate the rest
   const fixed = ids[0];
   let rot = ids.slice(1);
 
@@ -388,7 +434,6 @@ function buildRoundRobinSchedule(playerIds) {
       const aId = left[i];
       const bId = right[i];
 
-      // If BYE involved, represent as null opponent
       if (aId === null && bId === null) continue;
       if (aId === null) pairings.push({ aId: bId, bId: null });
       else if (bId === null) pairings.push({ aId: aId, bId: null });
@@ -396,8 +441,6 @@ function buildRoundRobinSchedule(playerIds) {
     }
 
     scheduleRounds.push({ number: r, pairings });
-
-    // rotate: take last, put in front
     rot = [rot[rot.length - 1], ...rot.slice(0, rot.length - 1)];
   }
 
@@ -409,7 +452,6 @@ function buildRoundRobinSchedule(playerIds) {
  * ------------------------------ */
 
 function seedAndBuildCutRound(state, round, cutSize) {
-  // Freeze seeds on first use so they can't change if swiss standings update later
   if (!round.cutSeeds) {
     const seeds = computeStandings(state).slice(0, cutSize).map(s => s.id);
     round.cutSeeds = { cutSize, seeds };
@@ -417,7 +459,6 @@ function seedAndBuildCutRound(state, round, cutSize) {
 
   const seeds = round.cutSeeds.seeds;
 
-  // Bracket pairing: 1vN, 2v(N-1), ...
   const pairs = [];
   for (let i = 0; i < Math.floor(seeds.length / 2); i++) {
     pairs.push([seeds[i], seeds[seeds.length - 1 - i]]);
