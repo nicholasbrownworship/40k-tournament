@@ -1,10 +1,15 @@
 // tournament.js
 /**
- * Core tournament engine (Step 1)
+ * Core tournament engine
  * - Swiss: pairs by standings, soft avoids repeats, fair byes
  * - Round Robin: circle method schedule, locked once generated
  * - Standings: points → (optional) VP → SoS → name
- * - Cut helpers included (seeding); UI wiring comes in Step 2
+ * - Cut helpers included (seeding)
+ *
+ * IMPORTANT:
+ * - Creating a round DOES NOT generate pairings.
+ * - Pairings are generated ONLY when generatePairingsForRound(...) is called
+ *   (i.e., when the user clicks "Generate Pairings").
  */
 
 export function standings(state) {
@@ -13,17 +18,16 @@ export function standings(state) {
 
 /**
  * Backward-compatible helper used by your current app.js:
- * Creates a new round and immediately generates pairings for it.
+ * Creates a new round ONLY (no pairings).
  */
 export function nextRound(state) {
   const round = createNextRound(state);
-  generatePairingsForRound(state, round.id);
   state.activeRoundId = round.id;
   return round;
 }
 
 /** -----------------------------
- * Public API for Step 2 wiring
+ * Public API for app wiring
  * ------------------------------ */
 
 export function createNextRound(state, opts = {}) {
@@ -43,6 +47,7 @@ export function createNextRound(state, opts = {}) {
     cutSeeds: null, // { cutSize, seeds:[playerId,...] }
   };
 
+  if (!Array.isArray(state.rounds)) state.rounds = [];
   state.rounds.push(round);
   return round;
 }
@@ -57,8 +62,8 @@ export function generatePairingsForRound(state, roundId) {
 
   const format = (state.meta?.format || "swiss").toLowerCase();
 
+  // Cut rounds (or swiss_cut format) can seed bracket if cutSize >= 2
   if (round.isCut || format === "swiss_cut") {
-    // Cut rounds: if cutSize is 0, treat as swiss
     const cutSize = clampInt(state.meta?.cutSize, 0);
     if (cutSize >= 2) {
       return seedAndBuildCutRound(state, round, cutSize);
@@ -78,7 +83,9 @@ export function generatePairingsForRound(state, roundId) {
       table: idx + 1,
       aId: p.aId,
       bId: p.bId, // may be null (BYE)
-      result: p.bId ? { outcome: "NONE", aVP: 0, bVP: 0 } : { outcome: "BYE", aVP: 0, bVP: 0 },
+      result: p.bId
+        ? { outcome: "NONE", aVP: 0, bVP: 0 }
+        : { outcome: "BYE", aVP: 0, bVP: 0 },
     }));
     return round;
   }
@@ -96,7 +103,7 @@ export function lockRound(state, roundId, locked = true) {
 export function setMatchResult(state, roundId, matchId, outcome, aVP = 0, bVP = 0) {
   const r = getRound(state, roundId);
   if (!r) return;
-  const m = r.pairings.find(x => x.id === matchId);
+  const m = (r.pairings || []).find(x => x.id === matchId);
   if (!m) return;
   if (r.locked) return;
 
