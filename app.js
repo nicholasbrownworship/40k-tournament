@@ -1,18 +1,12 @@
+/* app.js - Tactical Console v3.1 */
+
+// 1. Imports from Google's Servers
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getDatabase, ref, set, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-// 1. YOUR FIREBASE CONFIG (Paste from Firebase Console)
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
+// 2. Your Specific Firebase Config
+const firebaseConfig = {
     apiKey: "AIzaSyDEAIgfetTsb4TQbWeEIQkKgcWXTlbOuQE",
     authDomain: "k-tournament-console.firebaseapp.com",
     projectId: "k-tournament-console",
@@ -20,27 +14,19 @@ import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from
     messagingSenderId: "30278148010",
     appId: "1:30278148010:web:9226955ddd75633c87d5d3",
     measurementId: "G-ER0NM659HX"
-  };
+};
 
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
-</script>
-
-
-
-
-// Initialize Firebase
+// 3. Initialize Firebase Services
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
+// 4. App State & Admin Settings
 let currentUser = null;
-let isAdmin = false; // Set your email here or handle via DB
-const ADMIN_EMAIL = "your-email@gmail.com"; 
+let isAdmin = false; 
+const ADMIN_EMAIL = "your-email@gmail.com"; // UPDATE THIS to your Gmail to see TO tools
 
-// --- CORE APP STATE ---
 let state = { players: [], rounds: [], activeRoundId: null };
 
 // --- DATABASE SYNC ---
@@ -55,12 +41,18 @@ onValue(ref(db, 'tournament/'), (snapshot) => {
 });
 
 // --- AUTH LOGIC ---
-document.getElementById("btnLogin").onclick = () => signInWithPopup(auth, provider);
+document.getElementById("btnLogin").onclick = () => {
+    signInWithPopup(auth, provider).catch(error => {
+        console.error("Login failed:", error);
+        alert("Login Error: " + error.message);
+    });
+};
 
 onAuthStateChanged(auth, (user) => {
     if (user) {
         currentUser = user;
         isAdmin = user.email === ADMIN_EMAIL;
+        
         document.getElementById("viewLogin").hidden = true;
         document.getElementById("viewApp").hidden = false;
         document.getElementById("userBadge").innerText = `Signed in as: ${user.displayName}`;
@@ -72,7 +64,16 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
-// --- TOURNAMENT FUNCTIONS ---
+// --- TAB NAVIGATION ---
+document.querySelectorAll(".tab").forEach(tab => {
+    tab.onclick = () => {
+        document.querySelectorAll(".tab, .tab-content").forEach(el => el.classList.remove("active"));
+        tab.classList.add("active");
+        document.getElementById(`tab-${tab.dataset.tab}`).classList.add("active");
+    };
+});
+
+// --- SCORING & STANDINGS ---
 
 function computeStandings() {
     const stats = state.players.map(p => ({
@@ -87,11 +88,15 @@ function computeStandings() {
             if (!pA || !m.result || m.result.outcome === "NONE") return;
 
             const processScore = (player, scoreObj) => {
-                player.primary += parseInt(scoreObj.primary) || 0;
-                player.secondary += parseInt(scoreObj.secondary) || 0;
-                player.paint += parseInt(scoreObj.paint) || 0;
-                player.extra += parseInt(scoreObj.extra) || 0;
-                player.vp += (parseInt(scoreObj.primary) || 0) + (parseInt(scoreObj.secondary) || 0) + (parseInt(scoreObj.paint) || 0) + (parseInt(scoreObj.extra) || 0);
+                const pri = parseInt(scoreObj.primary) || 0;
+                const sec = parseInt(scoreObj.secondary) || 0;
+                const pnt = parseInt(scoreObj.paint) || 0;
+                const ext = parseInt(scoreObj.extra) || 0;
+                player.primary += pri;
+                player.secondary += sec;
+                player.paint += pnt;
+                player.extra += ext;
+                player.vp += (pri + sec + pnt + ext);
             };
 
             processScore(pA, m.result.a);
@@ -107,7 +112,7 @@ function computeStandings() {
     return stats.sort((a, b) => (b.points - a.points) || (b.vp - a.vp) || (b.primary - a.primary));
 }
 
-// --- RENDERING (With Personalization) ---
+// --- RENDERERS ---
 
 function renderAll() {
     renderPlayers();
@@ -115,12 +120,27 @@ function renderAll() {
     renderPairings();
 }
 
+function renderPlayers() {
+    const tbody = document.querySelector("#playersTable tbody");
+    if (!tbody) return;
+    tbody.innerHTML = state.players.map((p, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td><strong>${p.name}</strong></td>
+            <td>${p.faction}</td>
+            <td>${isAdmin ? `<button class="btn btn-danger" onclick="window.removePlayer('${p.id}')">Remove</button>` : '---'}</td>
+        </tr>
+    `).join('');
+}
+
 function renderPairings() {
     const container = document.getElementById("pairingsContainer");
     const activeRound = state.rounds.find(r => r.id === state.activeRoundId);
-    if (!activeRound) return;
+    if (!activeRound) {
+        container.innerHTML = "<p>No active round pairings yet.</p>";
+        return;
+    }
 
-    // Filter pairings: Admin sees all, Player sees only theirs
     const pairingsToShow = isAdmin 
         ? activeRound.pairings 
         : activeRound.pairings.filter(m => {
@@ -150,7 +170,7 @@ function renderPairings() {
                         `;
 
                         return `
-                        <tr class="pairing-row">
+                        <tr>
                             <td>
                                 <div><strong>Table ${m.table}: ${pA?.name} vs ${pB ? pB.name : 'BYE'}</strong></div>
                                 <div style="margin-top:10px;">${pA?.name}: ${inputs('a')}</div>
@@ -170,16 +190,34 @@ function renderPairings() {
         </div>
     `;
 
-    // Event Delegation for Save Buttons
     document.querySelectorAll(".btn-save-match").forEach(btn => {
         btn.onclick = () => saveMatchScore(btn.dataset.mid);
     });
 }
 
+function renderStandings() {
+    const tbody = document.querySelector("#standingsTable tbody");
+    if (!tbody) return;
+    const ranked = computeStandings();
+    tbody.innerHTML = ranked.map((p, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td><strong>${p.name}</strong></td>
+            <td>${p.faction}</td>
+            <td>${p.points}</td>
+            <td>${p.w}-${p.d}-${p.l}</td>
+            <td><strong>${p.vp}</strong> <small>(P:${p.primary})</small></td>
+        </tr>
+    `).join('');
+}
+
+// --- CLOUD SAVE FUNCTIONS ---
+
 function saveMatchScore(matchId) {
-    const roundIndex = state.rounds.findIndex(r => r.id === state.activeRoundId);
-    const matchIndex = state.rounds[roundIndex].pairings.findIndex(m => m.id === matchId);
-    const row = document.querySelector(`.btn-save-match[data-mid="${matchId}"]`).closest('tr');
+    const roundIdx = state.rounds.findIndex(r => r.id === state.activeRoundId);
+    const matchIdx = state.rounds[roundIdx].pairings.findIndex(m => m.id === matchId);
+    const btn = document.querySelector(`.btn-save-match[data-mid="${matchId}"]`);
+    const row = btn.closest('td');
 
     const getVal = (side, type) => row.querySelector(`[data-side="${side}"][data-type="${type}"]`)?.value || 0;
 
@@ -189,47 +227,28 @@ function saveMatchScore(matchId) {
         b: { primary: getVal('b', 'primary'), secondary: getVal('b', 'secondary'), paint: getVal('b', 'paint'), extra: getVal('b', 'extra') }
     };
 
-    update(ref(db, `tournament/rounds/${roundIndex}/pairings/${matchIndex}/result`), result);
-    alert("Score Submitted to Cloud");
+    update(ref(db, `tournament/rounds/${roundIdx}/pairings/${matchIdx}/result`), result)
+        .then(() => alert("Score Recorded."));
 }
 
-// --- ADMIN CONTROLS ---
-
 document.getElementById("btnAddPlayer").onclick = () => {
-    const name = document.getElementById("newPlayerName").value;
-    const faction = document.getElementById("newPlayerFaction").value;
-    if (!name) return;
-    const newId = crypto.randomUUID();
-    set(ref(db, 'tournament/players/' + newId), { id: newId, name, faction });
+    const n = document.getElementById("newPlayerName").value;
+    const f = document.getElementById("newPlayerFaction").value;
+    if (!n) return;
+    const id = crypto.randomUUID();
+    set(ref(db, 'tournament/players/' + id), { id, name: n, faction: f });
 };
 
-document.getElementById("btnGeneratePairings").onclick = () => {
-    if (!isAdmin) return;
-    const roundIndex = state.rounds.findIndex(r => r.id === state.activeRoundId);
-    let pool = [];
-
-    if (state.rounds.length === 1) {
-        pool = [...state.players].sort(() => 0.5 - Math.random());
-    } else {
-        const standings = computeStandings();
-        const brackets = {};
-        standings.forEach(p => {
-            if (!brackets[p.points]) brackets[p.points] = [];
-            brackets[p.points].push(p);
-        });
-        Object.keys(brackets).sort((a,b) => b-a).forEach(k => {
-            pool.push(...brackets[k].sort(() => 0.5 - Math.random()));
-        });
-    }
-
-    const pairings = [];
-    for (let i = 0; i < pool.length; i += 2) {
-        pairings.push({
-            id: crypto.randomUUID(), table: (i/2)+1, aId: pool[i].id, bId: pool[i+1]?.id || null,
-            result: { outcome: pool[i+1] ? "NONE" : "BYE", a: {}, b: {} }
-        });
-    }
-    update(ref(db, `tournament/rounds/${roundIndex}`), { pairings });
+document.getElementById("btnNextRound").onclick = () => {
+    const id = crypto.randomUUID();
+    const round = { id, label: `Round ${state.rounds.length + 1}`, pairings: [] };
+    const updates = {};
+    updates['tournament/rounds/' + state.rounds.length] = round;
+    updates['tournament/activeRoundId'] = id;
+    update(ref(db), updates);
 };
 
-// ... [Include standard tab logic and player removal helpers here]
+// Global Removal helper
+window.removePlayer = (id) => {
+    remove(ref(db, 'tournament/players/' + id));
+};
