@@ -1,201 +1,96 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>40K Tournament Ops</title>
-  <link rel="stylesheet" href="styles.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warhammer 40K Tournament Ops</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="wrap">
+    <div class="ops-wrapper">
+        <header class="ops-header">
+            <div class="brand">
+                <h1>Tactical Console <span class="v-tag">v2.0</span></h1>
+            </div>
+            <div class="global-actions">
+                <button id="btnReset" class="btn btn-danger">Wipe Data</button>
+            </div>
+        </header>
 
-    <!-- This banner is how we KNOW app.js is running -->
-    <div id="bootBanner" class="notice">
-      Loading app…
+        <main id="viewLanding" class="view">
+            <div class="card setup-card">
+                <h2>Event Initialization</h2>
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label>Event Name</label>
+                        <input id="lEventName" value="Grand Tournament 2026">
+                    </div>
+                    <div class="input-group">
+                        <label>Players</label>
+                        <input id="lPlayers" type="number" value="8">
+                    </div>
+                </div>
+                <div class="actions">
+                    <button id="btnRecommend" class="btn btn-primary">Run Recommendation</button>
+                </div>
+                <div id="recommendBox" class="notice" hidden>
+                    <div id="recommendText"></div>
+                    <button id="btnBuildRecommended" class="btn btn-success">Initialize Event</button>
+                </div>
+            </div>
+        </main>
+
+        <main id="viewApp" class="view" hidden>
+            <div class="card event-status">
+                <h2 id="eventTitle">Event Dashboard</h2>
+                <nav class="tabs">
+                    <button class="tab active" data-tab="players">Players</button>
+                    <button class="tab" data-tab="pairings">Rounds & Scoring</button>
+                    <button class="tab" data-tab="standings">Leaderboard</button>
+                </nav>
+            </div>
+
+            <section id="tab-players" class="tab-content active">
+                <div class="card">
+                    <h3>Add New Combatant</h3>
+                    <div class="form-grid">
+                        <input id="newPlayerName" placeholder="Player Name">
+                        <input id="newPlayerFaction" placeholder="Faction (e.g. Necrons)">
+                        <button id="btnAddPlayer" class="btn btn-primary">Register Player</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <table id="playersTable">
+                        <thead><tr><th>#</th><th>Name</th><th>Faction</th><th>Action</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="tab-pairings" class="tab-content">
+                <div class="card control-bar">
+                    <div class="round-nav">
+                        <select id="roundSelect"></select>
+                        <button id="btnNextRound" class="btn">New Round</button>
+                    </div>
+                    <div class="round-actions">
+                        <button id="btnGeneratePairings" class="btn btn-primary">Auto-Pair Players</button>
+                        <button id="btnSaveResults" class="btn btn-success">Commit Scores</button>
+                    </div>
+                </div>
+                <div id="pairingsContainer"></div>
+            </section>
+
+            <section id="tab-standings" class="tab-content">
+                <div class="card">
+                    <table id="standingsTable">
+                        <thead><tr><th>Rank</th><th>Name</th><th>Faction</th><th>Points</th><th>Record</th><th>SoS</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
     </div>
-
-    <header class="topbar">
-      <div class="brand">
-        <h1>40K Tournament Ops</h1>
-        <p class="sub">Local-first runner: recommend → build → pair → score → standings.</p>
-      </div>
-
-      <div class="topActions" aria-label="Top actions">
-        <button class="btn" id="btnGoHome" type="button">Home</button>
-        <button class="btn" id="btnExport" type="button">Export</button>
-        <button id="btnReset" class="btn danger">Reset Tournament</button>
-
-        <label class="btn" for="fileImport">Import</label>
-        <input id="fileImport" type="file" accept="application/json" />
-
-        <button class="btn danger" id="btnWipe" type="button">Wipe</button>
-      </div>
-    </header>
-
-    <!-- LANDING VIEW -->
-    <section id="viewLanding">
-      <div class="card">
-        <h2>Build Your Event</h2>
-
-        <div class="field">
-          <label for="lEventName">Event Name</label>
-          <input id="lEventName" placeholder="e.g., Store Night RTT — Bastior" />
-        </div>
-
-        <div class="fieldRow">
-          <div class="field">
-            <label for="lPlayers">Players (expected)</label>
-            <input id="lPlayers" type="number" min="2" step="1" value="6" />
-          </div>
-          <div class="field">
-            <label for="lHours">Event Length (hours)</label>
-            <input id="lHours" type="number" min="1" step="1" value="4" />
-          </div>
-        </div>
-
-        <div class="fieldRow">
-          <div class="field">
-            <label for="lRoundMin">Minutes per round</label>
-            <input id="lRoundMin" type="number" min="45" step="5" value="180" />
-          </div>
-          <div class="field">
-            <label for="lBreakMin">Break minutes per round</label>
-            <input id="lBreakMin" type="number" min="0" step="5" value="10" />
-          </div>
-        </div>
-
-        <div class="fieldRow">
-          <div class="field">
-            <label for="lScoringPreset">Scoring preset</label>
-            <select id="lScoringPreset">
-              <option value="3-1-0" selected>Win=3 / Draw=1 / Loss=0</option>
-              <option value="2-1-0">Win=2 / Draw=1 / Loss=0</option>
-              <option value="custom">Custom (set inside event)</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="lTieBreak">Tiebreak</label>
-            <select id="lTieBreak">
-              <option value="vp" selected>VP then SoS</option>
-              <option value="sos">SoS only (no VP)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="actions">
-          <button class="btn primary" id="btnRecommend" type="button">Recommend</button>
-          <button class="btn" id="btnCustomBuild" type="button">Start Custom Event</button>
-        </div>
-
-        <div id="recommendBox" class="notice" hidden>
-          <h3 class="sectionTitle" style="margin-top:0;">Recommendation</h3>
-          <div id="recommendText"></div>
-
-          <div class="hr"></div>
-
-          <div class="actions">
-            <button class="btn primary" id="btnBuildRecommended" type="button">Build This Event</button>
-            <button class="btn" id="btnClearRecommendation" type="button">Change Inputs</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- APP VIEW -->
-    <section id="viewApp" hidden>
-      <div class="card">
-        <div class="cardHeader">
-          <h2 id="eventTitle">Event</h2>
-          <div class="mutedSmall">Autosaves locally</div>
-        </div>
-
-        <nav class="tabs" aria-label="Tournament sections">
-          <button class="tab active" data-tab="players" type="button">Players</button>
-          <button class="tab" data-tab="pairings" type="button">Pairings</button>
-          <button class="tab" data-tab="standings" type="button">Standings</button>
-        </nav>
-
-        <section class="tabBody active" id="tab-players">
-          <div class="notice">Add players first. Then Pairings → Create Round → Generate Pairings.</div>
-
-          <div class="fieldRow">
-            <div class="field">
-              <label for="newPlayerName">Player Name</label>
-              <input id="newPlayerName" placeholder="e.g., Nick" />
-            </div>
-            <div class="field">
-              <label for="newPlayerFaction">Faction</label>
-              <input id="newPlayerFaction" placeholder="e.g., Blood Angels" />
-            </div>
-          </div>
-
-          <div class="actions">
-            <button class="btn primary" id="btnAddPlayer" type="button">Add Player</button>
-          </div>
-
-          <div class="hr"></div>
-          <table id="playersTable" class="u-full-width">
-  <thead>
-    <tr>
-      <th>#</th>
-      <th>Name</th>
-      <th>Faction</th>
-      <th class="noPrint">Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    </tbody>
-</table>
-        </section>
-
-        <section class="tabBody" id="tab-pairings">
-          <div class="notice">Create round → generate pairings → enter scores → save → lock.</div>
-
-          <div class="pairingControls">
-            <div class="left">
-              <span id="roundBadge" class="badge">—</span>
-              <select id="roundSelect" class="select"></select>
-            </div>
-            <div class="right">
-              <button class="btn primary" id="btnNextRound" type="button">Create Round</button>
-              <button class="btn" id="btnGeneratePairings" type="button">Generate Pairings</button>
-              <button class="btn" id="btnLockRound" type="button">Lock Round</button>
-              <button class="btn danger" id="btnDeleteRound" type="button">Delete Round</button>
-            </div>
-          </div>
-
-          <div class="hr"></div>
-          <div id="pairings" class="pairingsBox"></div>
-
-          <div class="hr"></div>
-          <div class="actions">
-            <button class="btn primary" id="btnSaveResults" type="button">Save Results</button>
-          </div>
-        </section>
-
-        <section class="tabBody" id="tab-standings">
-          <div class="notice">Standings update from logged results.</div>
-          <table id="standingsTable" class="u-full-width">
-  <thead>
-    <tr>
-      <th>Rank</th>
-      <th>Name</th>
-      <th>Faction</th>
-      <th>Pts</th>
-      <th>Record</th>
-      <th>VP</th>
-      <th>SoS</th>
-      <th>Opponents</th>
-    </tr>
-  </thead>
-  <tbody>
-    </tbody>
-</table>
-        </section>
-      </div>
-    </section>
-  </div>
-
-  <script type="module" src="./app.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>
