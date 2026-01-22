@@ -1,124 +1,180 @@
-// app.js
-import { defaultState, loadState, saveState, STORAGE_KEY } from "./state.js";
-import { nextRound, generatePairingsForRound, lockRound, setMatchResult } from "./tournament.js";
-import { renderAll } from "./render.js";
+/* app.js - Fresh Start Tactical Engine */
 
-let state = loadState();
-let pendingRecommendation = null;
+let state = {
+    players: [],
+    rounds: [],
+    activeRoundId: null,
+    meta: { name: "", format: "swiss" }
+};
 
-document.addEventListener("DOMContentLoaded", () => {
-    initEventListeners();
-    const hasData = (state.players?.length > 0 || state.rounds?.length > 0);
-    hasData ? showApp() : showLanding();
-});
+// --- CORE LOGIC ---
+function computeStandings() {
+    const players = state.players.map(p => ({
+        ...p, points: 0, sos: 0, w: 0, d: 0, l: 0, oppIds: []
+    }));
 
-function showLanding() { 
-    document.getElementById("viewLanding").hidden = false; 
-    document.getElementById("viewApp").hidden = true; 
-}
+    state.rounds.forEach(r => {
+        r.pairings.forEach(m => {
+            const pA = players.find(p => p.id === m.aId);
+            const pB = players.find(p => p.id === m.bId);
+            if (!pA || !m.result) return;
 
-function showApp() { 
-    document.getElementById("viewLanding").hidden = true; 
-    document.getElementById("viewApp").hidden = false; 
-    refresh(); 
-}
+            if (pB) { pA.oppIds.push(pB.id); pB.oppIds.push(pA.id); }
 
-function refresh() {
-    const title = document.getElementById("eventTitle");
-    if (title) title.textContent = state.meta?.name || "40K Event";
-    saveState(state);
-    renderAll(state);
-}
-
-function on(id, fn) {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener("click", fn);
-}
-
-function initEventListeners() {
-    on("btnRecommend", () => {
-        pendingRecommendation = getRecommendation();
-        renderRecommendation(pendingRecommendation);
-    });
-
-    on("btnBuildRecommended", () => {
-        const name = document.getElementById("lEventName")?.value || "New Event";
-        const rec = pendingRecommendation || getRecommendation();
-        state = defaultState();
-        state.meta.name = name;
-        state.meta.format = rec.format;
-        state.meta.useVP = (document.getElementById("lTieBreak")?.value === "vp");
-        showApp();
-    });
-
-    on("btnAddPlayer", () => {
-        const nInput = document.getElementById("newPlayerName");
-        const fInput = document.getElementById("newPlayerFaction");
-        if (!nInput.value.trim()) return;
-        state.players.push({ id: Math.random().toString(16).slice(2,10), name: nInput.value.trim(), faction: fInput.value.trim() });
-        nInput.value = ""; fInput.value = "";
-        refresh();
-    });
-
-    on("btnNextRound", () => {
-        const round = nextRound(state);
-        state.activeRoundId = round.id;
-        refresh();
-    });
-
-    on("btnGeneratePairings", () => {
-        if (!state.activeRoundId) return alert("Create a round first");
-        generatePairingsForRound(state, state.activeRoundId);
-        refresh();
-    });
-
-    // Added: Update view when round dropdown changes
-    const roundSelect = document.getElementById("roundSelect");
-    if (roundSelect) {
-        roundSelect.addEventListener("change", (e) => {
-            state.activeRoundId = e.target.value;
-            refresh();
+            if (m.result.outcome === "A") { pA.points += 3; pA.w++; if(pB) pB.l++; }
+            else if (m.result.outcome === "B") { if(pB) { pB.points += 3; pB.w++; } pA.l++; }
+            else if (m.result.outcome === "D") { pA.points += 1; pA.d++; if(pB) { pB.points += 1; pB.d++; } }
+            else if (m.result.outcome === "BYE") { pA.points += 3; pA.w++; }
         });
+    });
+
+    return players.sort((a, b) => b.points - a.points);
+}
+
+// --- RENDERERS ---
+function renderAll() {
+    renderPlayers();
+    renderRounds();
+    renderStandings();
+}
+
+function renderPlayers() {
+    const tbody = document.querySelector("#playersTable tbody");
+    tbody.innerHTML = state.players.map((p, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td><strong>${p.name}</strong></td>
+            <td>${p.faction}</td>
+            <td><button class="btn btn-danger" onclick="removePlayer('${p.id}')">Remove</button></td>
+        </tr>
+    `).join('');
+}
+
+function renderRounds() {
+    const sel = document.getElementById("roundSelect");
+    sel.innerHTML = state.rounds.map(r => `<option value="${r.id}">${r.label}</option>`).join('');
+    
+    const container = document.getElementById("pairingsContainer");
+    const activeRound = state.rounds.find(r => r.id === state.activeRoundId);
+    
+    if (!activeRound) {
+        container.innerHTML = "<p>No rounds created yet.</p>";
+        return;
     }
 
-    on("btnSaveResults", () => {
-        const container = document.getElementById("pairings");
-        const rows = container.querySelectorAll(".pairingRow");
-        rows.forEach(row => {
-            const mid = row.dataset.matchId;
-            const outcome = row.querySelector('[data-field="outcome"]')?.value;
-            const aVP = parseInt(row.querySelector('[data-field="aVP"]')?.value || 0);
-            const bVP = parseInt(row.querySelector('[data-field="bVP"]')?.value || 0);
-            setMatchResult(state, state.activeRoundId, mid, outcome, aVP, bVP);
+    container.innerHTML = `
+        <div class="card">
+            <h3>${activeRound.label} Pairings</h3>
+            <table>
+                <thead><tr><th>Table</th><th>Player A</th><th>Player B</th><th>Result</th></tr></thead>
+                <tbody>
+                    ${activeRound.pairings.map(m => {
+                        const pA = state.players.find(p => p.id === m.aId);
+                        const pB = state.players.find(p => p.id === m.bId);
+                        return `
+                        <tr class="pairing-row" data-match-id="${m.id}">
+                            <td>${m.table}</td>
+                            <td>${pA?.name}</td>
+                            <td>${pB ? pB.name : '<em>BYE</em>'}</td>
+                            <td>
+                                <select class="outcome-select" ${!pB ? 'disabled' : ''}>
+                                    <option value="NONE" ${m.result?.outcome === 'NONE' ? 'selected' : ''}>Pending</option>
+                                    <option value="A" ${m.result?.outcome === 'A' ? 'selected' : ''}>A Win</option>
+                                    <option value="B" ${m.result?.outcome === 'B' ? 'selected' : ''}>B Win</option>
+                                    <option value="D" ${m.result?.outcome === 'D' ? 'selected' : ''}>Draw</option>
+                                </select>
+                            </td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function renderStandings() {
+    const tbody = document.querySelector("#standingsTable tbody");
+    const ranked = computeStandings();
+    tbody.innerHTML = ranked.map((p, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td>${p.name}</td>
+            <td>${p.faction}</td>
+            <td>${p.points}</td>
+            <td>${p.w}-${p.d}-${p.l}</td>
+            <td>-</td>
+        </tr>
+    `).join('');
+}
+
+// --- EVENT HANDLERS ---
+document.addEventListener("DOMContentLoaded", () => {
+    // Setup View Toggling
+    document.querySelectorAll(".tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+            document.querySelectorAll(".tab, .tab-content").forEach(el => el.classList.remove("active"));
+            tab.classList.add("active");
+            document.getElementById(`tab-${tab.dataset.tab}`).classList.add("active");
         });
-        refresh();
-        alert("Scores Locked in.");
     });
 
-    on("btnReset", () => {
-        if (!confirm("Wipe everything?")) return;
-        localStorage.removeItem(STORAGE_KEY);
-        state = defaultState();
-        location.reload();
-    });
+    document.getElementById("btnRecommend").onclick = () => {
+        const p = document.getElementById("lPlayers").value;
+        document.getElementById("recommendText").innerText = `Swiss Format: ${Math.ceil(Math.log2(p))} Rounds Recommended.`;
+        document.getElementById("recommendBox").hidden = false;
+    };
 
-    // Tabs Logic
-    document.querySelectorAll(".tab").forEach(btn => {
-        btn.addEventListener("click", () => {
-            document.querySelectorAll(".tab, .tabBody").forEach(el => el.classList.remove("active"));
-            btn.classList.add("active");
-            document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+    document.getElementById("btnBuildRecommended").onclick = () => {
+        state.meta.name = document.getElementById("lEventName").value;
+        document.getElementById("viewLanding").hidden = true;
+        document.getElementById("viewApp").hidden = false;
+        document.getElementById("eventTitle").innerText = state.meta.name;
+        renderAll();
+    };
+
+    document.getElementById("btnAddPlayer").onclick = () => {
+        const name = document.getElementById("newPlayerName").value;
+        const faction = document.getElementById("newPlayerFaction").value;
+        if (!name) return;
+        state.players.push({ id: crypto.randomUUID(), name, faction });
+        document.getElementById("newPlayerName").value = "";
+        renderAll();
+    };
+
+    document.getElementById("btnNextRound").onclick = () => {
+        const round = { id: crypto.randomUUID(), label: `Round ${state.rounds.length + 1}`, pairings: [] };
+        state.rounds.push(round);
+        state.activeRoundId = round.id;
+        renderAll();
+    };
+
+    document.getElementById("btnGeneratePairings").onclick = () => {
+        const round = state.rounds.find(r => r.id === state.activeRoundId);
+        if (!round) return;
+        // Simple Random Pairing for Start
+        const shuffled = [...state.players].sort(() => 0.5 - Math.random());
+        round.pairings = [];
+        for (let i = 0; i < shuffled.length; i += 2) {
+            round.pairings.push({
+                id: crypto.randomUUID(),
+                table: (i/2) + 1,
+                aId: shuffled[i].id,
+                bId: shuffled[i+1]?.id || null,
+                result: { outcome: shuffled[i+1] ? "NONE" : "BYE" }
+            });
+        }
+        renderAll();
+    };
+
+    document.getElementById("btnSaveResults").onclick = () => {
+        const round = state.rounds.find(r => r.id === state.activeRoundId);
+        document.querySelectorAll(".pairing-row").forEach(row => {
+            const mId = row.dataset.matchId;
+            const outcome = row.querySelector(".outcome-select").value;
+            const match = round.pairings.find(m => m.id === mId);
+            if (match) match.result.outcome = outcome;
         });
-    });
-}
-
-function getRecommendation() {
-    const p = parseInt(document.getElementById("lPlayers").value) || 8;
-    return { format: "swiss", roundsTotal: Math.ceil(Math.log2(p)), reason: "Standard Swiss" };
-}
-
-function renderRecommendation(rec) {
-    const box = document.getElementById("recommendBox");
-    document.getElementById("recommendText").innerHTML = `Format: ${rec.format} | Rounds: ${rec.roundsTotal}`;
-    box.hidden = false;
-}
+        renderAll();
+        alert("Results Saved");
+    };
+});
