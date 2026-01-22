@@ -6,15 +6,17 @@
     <title>Tactical Console Cloud</title>
     <link rel="stylesheet" href="styles.css">
     <style>
-        .table-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-top: 15px; }
-        .status-playing { background-color: #ffc107; color: #212529; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 0.75rem; }
-        .status-finished { background-color: #28a745; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 0.75rem; }
+        .table-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+        .status-playing { background-color: #ffc107; color: #212529; padding: 8px; border-radius: 6px; text-align: center; font-weight: bold; font-size: 0.7rem; }
+        .status-finished { background-color: #28a745; color: white; padding: 8px; border-radius: 6px; text-align: center; font-weight: bold; font-size: 0.7rem; }
         .pending-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #ddd; }
         #announcementBanner { 
             position: fixed; top: 0; left: 0; width: 100%; padding: 15px; 
             background: #dc3545; color: white; text-align: center; 
             font-weight: bold; z-index: 9999; display: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
+        .round-block { border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 20px; }
+        .round-block:last-child { border-bottom: none; }
     </style>
 </head>
 <body>
@@ -25,6 +27,7 @@
     <div id="viewLogin" class="ops-wrapper">
         <div class="card" style="text-align:center; margin-top: 50px;">
             <h1>Tactical Console</h1>
+            <p>Sign in to manage your matches and follow the event.</p>
             <button id="btnLogin" class="btn btn-primary">Sign in with Google</button>
         </div>
     </div>
@@ -35,25 +38,25 @@
                 <h1 id="eventTitle">Tournament Console</h1>
                 <div id="userBadge" style="font-size: 0.8rem; color: #007bff;"></div>
             </div>
-            <button id="btnReset" class="btn btn-danger admin-only" hidden>Wipe All Data</button>
+            <button id="btnReset" class="btn btn-danger admin-only" hidden>Wipe Data</button>
         </header>
 
         <div id="registrationZone" class="card" style="margin: 20px;" hidden>
             <h3>Join Tournament</h3>
             <div class="form-grid">
-                <input type="text" id="regFaction" placeholder="Your Faction (e.g. Space Marines)">
+                <input type="text" id="regFaction" placeholder="Your Faction">
                 <button id="btnRequestJoin" class="btn btn-primary">Request to Join</button>
             </div>
         </div>
 
         <div class="timer-deck card" style="margin: 20px; display: flex; justify-content: space-between; align-items: center;">
             <div class="timer-display">
-                <span style="font-size: 0.7rem; display: block; opacity: 0.7; text-transform: uppercase;">Time Remaining</span>
-                <span id="timerClock" style="font-size: 2.2rem; font-weight: bold; font-family: monospace;">00:00</span>
+                <span style="font-size: 0.7rem; display: block; opacity: 0.7;">ROUND TIME</span>
+                <span id="timerClock" style="font-size: 2rem; font-weight: bold; font-family: monospace;">00:00</span>
             </div>
             <div class="timer-controls admin-only" hidden>
-                <input type="number" id="timerInput" value="150" style="width: 70px; padding: 8px;">
-                <button id="btnSetTimer" class="btn btn-sm">Update Clock</button>
+                <input type="number" id="timerInput" value="150" style="width: 60px;">
+                <button id="btnSetTimer" class="btn btn-sm">Set Clock</button>
             </div>
         </div>
 
@@ -65,29 +68,43 @@
         </nav>
 
         <section id="tab-players" class="tab-content active">
-            <div class="card"><table id="playersTable"><thead><tr><th>#</th><th>Player</th><th>Faction</th><th>Manage</th></tr></thead><tbody></tbody></table></div>
+            <div class="card"><table id="playersTable"><thead><tr><th>#</th><th>Player</th><th>Faction</th><th>Action</th></tr></thead><tbody></tbody></table></div>
         </section>
 
-        <section id="tab-pairings" class="tab-content"><div id="pairingsContainer"></div></section>
+        <section id="tab-pairings" class="tab-content">
+            <div id="pairingsContainer"></div>
+        </section>
 
         <section id="tab-standings" class="tab-content">
             <div class="card"><table id="standingsTable"><thead><tr><th>Rank</th><th>Name</th><th>Faction</th><th>Pts</th><th>W-D-L</th><th>VP</th></tr></thead><tbody></tbody></table></div>
         </section>
 
         <section id="tab-admin" class="tab-content">
-            <div class="card"><h3>Live Table Monitor</h3><div id="tableMonitor" class="table-grid"></div></div>
-            <div class="card"><h3>Registration Requests</h3><div id="pendingList"></div></div>
-            <div class="card"><h3>Tournament Control</h3>
+            <div class="card">
+                <h3>Round History & Corrections</h3>
+                <p style="font-size: 0.8rem; opacity: 0.7;">Scroll back to any round to edit scores.</p>
+                <div id="historyContainer"></div>
+            </div>
+
+            <div class="card">
+                <h3>Pending Approvals</h3>
+                <div id="pendingList"></div>
+            </div>
+
+            <div class="card">
+                <h3>Control Panel</h3>
                 <div style="display:flex; gap:10px;">
-                    <button id="btnNextRound" class="btn">New Round Slot</button>
+                    <button id="btnNextRound" class="btn">Add Round Slot</button>
                     <button id="btnGeneratePairings" class="btn btn-primary">Pair & Start Clock</button>
                 </div>
             </div>
-            <div class="card"><h3>Manual Add</h3>
+            
+            <div class="card">
+                <h3>Manual Add</h3>
                 <div class="form-grid">
                     <input type="text" id="newPlayerName" placeholder="Name">
                     <input type="text" id="newPlayerFaction" placeholder="Faction">
-                    <button id="btnAddPlayer" class="btn">Add Player</button>
+                    <button id="btnAddPlayer" class="btn">Add</button>
                 </div>
             </div>
         </section>
