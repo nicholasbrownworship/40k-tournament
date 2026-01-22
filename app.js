@@ -1,4 +1,4 @@
-/* app.js - Tactical Console v3.4 (Final Fix) */
+/* app.js - Tactical Console v4.0 (Registration & TO Approval) */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getDatabase, ref, set, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
@@ -22,19 +22,19 @@ const provider = new GoogleAuthProvider();
 let currentUser = null;
 let isAdmin = false; 
 const ADMIN_EMAIL = "nicholasbrownworship@gmail.com"; 
-let state = { players: [], rounds: [], activeRoundId: null };
+let state = { players: [], rounds: [], activeRoundId: null, pending: [] };
 
 // --- DATABASE SYNC ---
 onValue(ref(db, 'tournament/'), (snapshot) => {
     const data = snapshot.val();
     if (data) {
-        // Essential: Convert Firebase objects to Arrays for the UI to loop through
         state.players = data.players ? Object.values(data.players) : [];
         state.rounds = data.rounds ? Object.values(data.rounds) : [];
         state.activeRoundId = data.activeRoundId || null;
+        state.pending = data.pending ? Object.values(data.pending) : [];
         renderAll();
     } else {
-        state = { players: [], rounds: [], activeRoundId: null };
+        state = { players: [], rounds: [], activeRoundId: null, pending: [] };
         renderAll();
     }
 });
@@ -45,7 +45,7 @@ document.getElementById("btnLogin").onclick = () => signInWithPopup(auth, provid
 onAuthStateChanged(auth, (user) => {
     if (user) {
         currentUser = user;
-        isAdmin = (user.email === ADMIN_EMAIL);
+        isAdmin = (user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
         
         document.getElementById("viewLogin").hidden = true;
         document.getElementById("viewApp").hidden = false;
@@ -56,10 +56,21 @@ onAuthStateChanged(auth, (user) => {
             el.hidden = !isAdmin;
             if (isAdmin) el.style.display = 'block';
         });
-        
+
+        checkRegistrationStatus();
         renderAll();
     }
 });
+
+function checkRegistrationStatus() {
+    if (!currentUser || isAdmin) {
+        document.getElementById("registrationZone").hidden = true;
+        return;
+    }
+    const isPlayer = state.players.some(p => p.id === currentUser.uid);
+    const isPending = state.pending.some(p => p.id === currentUser.uid);
+    document.getElementById("registrationZone").hidden = (isPlayer || isPending);
+}
 
 // --- TAB NAVIGATION ---
 document.querySelectorAll(".tab").forEach(tab => {
@@ -78,18 +89,18 @@ function computeStandings() {
 
     state.rounds.forEach(r => {
         if (!r.pairings) return;
-        const pairings = Object.values(r.pairings);
-        pairings.forEach(m => {
+        Object.values(r.pairings).forEach(m => {
             const pA = stats.find(p => p.id === m.aId);
             const pB = stats.find(p => p.id === m.bId);
             if (!pA || !m.result || m.result.outcome === "NONE") return;
 
             const scoreMatch = (player, score) => {
-                player.primary += parseInt(score.primary) || 0;
-                player.secondary += parseInt(score.secondary) || 0;
-                player.paint += parseInt(score.paint) || 0;
-                player.extra += parseInt(score.extra) || 0;
-                player.vp += (parseInt(score.primary)||0) + (parseInt(score.secondary)||0) + (parseInt(score.paint)||0) + (parseInt(score.extra)||0);
+                const p = parseInt(score.primary) || 0;
+                const s = parseInt(score.secondary) || 0;
+                const pt = parseInt(score.paint) || 0;
+                const e = parseInt(score.extra) || 0;
+                player.primary += p; player.secondary += s; player.paint += pt; player.extra += e;
+                player.vp += (p + s + pt + e);
             };
 
             scoreMatch(pA, m.result.a);
@@ -109,6 +120,23 @@ function renderAll() {
     renderPlayers();
     renderStandings();
     renderPairings();
+    renderPending();
+    checkRegistrationStatus();
+}
+
+function renderPending() {
+    const list = document.getElementById("pendingList");
+    if (!list || !isAdmin) return;
+    if (state.pending.length === 0) {
+        list.innerHTML = "<p>No pending requests.</p>";
+        return;
+    }
+    list.innerHTML = state.pending.map(p => `
+        <div class="card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span><strong>${p.name}</strong> (${p.faction})</span>
+            <button class="btn btn-success btn-sm" onclick="approvePlayer('${p.id}')">Approve</button>
+        </div>
+    `).join('');
 }
 
 function renderPlayers() {
@@ -128,67 +156,47 @@ function renderPairings() {
     const container = document.getElementById("pairingsContainer");
     const activeRound = state.rounds.find(r => r.id === state.activeRoundId);
     if (!activeRound) {
-        container.innerHTML = "<p class='card'>No active round. TO must create a round first.</p>";
+        container.innerHTML = "<p class='card'>No active round. Waiting for TO to start.</p>";
         return;
     }
 
     const pairings = activeRound.pairings ? Object.values(activeRound.pairings) : [];
-    
-    const pairingsToShow = isAdmin 
-        ? pairings 
-        : pairings.filter(m => {
-            const pA = state.players.find(p => p.id === m.aId);
-            const pB = state.players.find(p => p.id === m.bId);
-            return pA?.name === currentUser.displayName || pB?.name === currentUser.displayName;
-        });
+    const pairingsToShow = isAdmin ? pairings : pairings.filter(m => [m.aId, m.bId].includes(currentUser?.uid));
 
-    container.innerHTML = `
+    container.innerHTML = `<h3>${activeRound.label}</h3>` + pairingsToShow.map(m => {
+        const pA = state.players.find(p => p.id === m.aId);
+        const pB = state.players.find(p => p.id === m.bId);
+        const r = m.result || { outcome: "NONE", a: {}, b: {} };
+        const scoreRow = (side) => `
+            <div class="form-grid">
+                <input type="number" class="score-input" data-mid="${m.id}" data-side="${side}" data-type="primary" value="${r[side]?.primary || 0}">
+                <input type="number" class="score-input" data-mid="${m.id}" data-side="${side}" data-type="secondary" value="${r[side]?.secondary || 0}">
+                <input type="number" class="score-input" data-mid="${m.id}" data-side="${side}" data-type="paint" value="${r[side]?.paint || 0}">
+                <input type="number" class="score-input" data-mid="${m.id}" data-side="${side}" data-type="extra" value="${r[side]?.extra || 0}">
+            </div>`;
+
+        return `
         <div class="card">
-            <h3>${activeRound.label} ${isAdmin ? "(TO Control)" : "(My Match)"}</h3>
-            ${pairingsToShow.length === 0 ? "<p>No matches found.</p>" : ""}
-            <table>
-                <tbody>
-                    ${pairingsToShow.map(m => {
-                        const pA = state.players.find(p => p.id === m.aId);
-                        const pB = state.players.find(p => p.id === m.bId);
-                        const r = m.result || { outcome: "NONE", a: {}, b: {} };
-                        
-                        const scoreRow = (side) => `
-                            <div class="form-grid">
-                                <input type="number" class="score-input" data-mid="${m.id}" data-side="${side}" data-type="primary" value="${r[side]?.primary || 0}">
-                                <input type="number" class="score-input" data-mid="${m.id}" data-side="${side}" data-type="secondary" value="${r[side]?.secondary || 0}">
-                                <input type="number" class="score-input" data-mid="${m.id}" data-side="${side}" data-type="paint" value="${r[side]?.paint || 0}">
-                                <input type="number" class="score-input" data-mid="${m.id}" data-side="${side}" data-type="extra" value="${r[side]?.extra || 0}">
-                            </div>
-                        `;
-
-                        return `
-                        <tr>
-                            <td>
-                                <strong>Table ${m.table}: ${pA?.name} vs ${pB ? pB.name : 'BYE'}</strong>
-                                <div style="margin:10px 0;">${pA?.name}: ${scoreRow('a')}</div>
-                                ${pB ? `<div style="margin:10px 0;">${pB.name}: ${scoreRow('b')}</div>` : ''}
-                                <select class="outcome-select" data-mid="${m.id}" style="width:100px; margin-right:10px;">
-                                    <option value="NONE" ${r.outcome === 'NONE' ? 'selected' : ''}>Pending</option>
-                                    <option value="A" ${r.outcome === 'A' ? 'selected' : ''}>A Win</option>
-                                    <option value="B" ${r.outcome === 'B' ? 'selected' : ''}>B Win</option>
-                                    <option value="D" ${r.outcome === 'D' ? 'selected' : ''}>Draw</option>
-                                </select>
-                                <button class="btn btn-success btn-save-match" onclick="saveMatchScore('${m.id}')">Save</button>
-                            </td>
-                        </tr>`;
-                    }).join('')}
-                </tbody>
-            </table>
-        </div>
-    `;
+            <strong>Table ${m.table}: ${pA?.name} vs ${pB ? pB.name : 'BYE'}</strong>
+            <div>${pA?.name}: ${scoreRow('a')}</div>
+            ${pB ? `<div>${pB.name}: ${scoreRow('b')}</div>` : ''}
+            <div class="form-grid">
+                <select class="outcome-select" data-mid="${m.id}">
+                    <option value="NONE" ${r.outcome === 'NONE' ? 'selected' : ''}>Pending</option>
+                    <option value="A" ${r.outcome === 'A' ? 'selected' : ''}>A Win</option>
+                    <option value="B" ${r.outcome === 'B' ? 'selected' : ''}>B Win</option>
+                    <option value="D" ${r.outcome === 'D' ? 'selected' : ''}>Draw</option>
+                </select>
+                <button class="btn btn-success" onclick="saveMatchScore('${m.id}')">Save Score</button>
+            </div>
+        </div>`;
+    }).join('');
 }
 
 function renderStandings() {
     const tbody = document.querySelector("#standingsTable tbody");
     if (!tbody) return;
-    const ranked = computeStandings();
-    tbody.innerHTML = ranked.map((p, i) => `
+    tbody.innerHTML = computeStandings().map((p, i) => `
         <tr>
             <td>${i + 1}</td>
             <td>${p.name}</td>
@@ -200,7 +208,23 @@ function renderStandings() {
     `).join('');
 }
 
-// --- ADMIN CONTROL ACTIONS ---
+// --- ACTIONS ---
+
+document.getElementById("btnRequestJoin").onclick = () => {
+    const f = document.getElementById("regFaction").value;
+    if (!f || !currentUser) return alert("Enter a faction!");
+    set(ref(db, `tournament/pending/${currentUser.uid}`), {
+        id: currentUser.uid, name: currentUser.displayName, faction: f
+    }).then(() => alert("Request Sent!"));
+};
+
+window.approvePlayer = (uid) => {
+    const p = state.pending.find(x => x.id === uid);
+    const updates = {};
+    updates[`tournament/players/${uid}`] = p;
+    updates[`tournament/pending/${uid}`] = null;
+    update(ref(db), updates);
+};
 
 document.getElementById("btnAddPlayer").onclick = () => {
     const n = document.getElementById("newPlayerName").value;
@@ -212,71 +236,43 @@ document.getElementById("btnAddPlayer").onclick = () => {
 
 document.getElementById("btnNextRound").onclick = () => {
     if (!isAdmin) return;
-    const roundId = crypto.randomUUID();
-    const roundCount = state.rounds.length;
-    const newRound = { id: roundId, label: `Round ${roundCount + 1}`, pairings: {} };
-    
+    const rIdx = state.rounds.length;
+    const rId = crypto.randomUUID();
     const updates = {};
-    updates[`tournament/rounds/${roundCount}`] = newRound;
-    updates['tournament/activeRoundId'] = roundId;
-    update(ref(db), updates).then(() => alert("Round Created!"));
+    updates[`tournament/rounds/${rIdx}`] = { id: rId, label: `Round ${rIdx + 1}`, pairings: {} };
+    updates['tournament/activeRoundId'] = rId;
+    update(ref(db), updates);
 };
 
 document.getElementById("btnGeneratePairings").onclick = () => {
     if (!isAdmin || state.players.length < 2) return;
-    const currentRoundIdx = state.rounds.findIndex(r => r.id === state.activeRoundId);
-    if (currentRoundIdx === -1) return;
-
-    let pool = [];
-    if (state.rounds.length === 1) {
-        pool = [...state.players].sort(() => 0.5 - Math.random());
-    } else {
-        pool = computeStandings(); 
-    }
-
+    const rIdx = state.rounds.findIndex(r => r.id === state.activeRoundId);
+    if (rIdx === -1) return;
+    let pool = state.rounds.length === 1 ? [...state.players].sort(() => 0.5 - Math.random()) : computeStandings();
     const pairings = {};
     for (let i = 0; i < pool.length; i += 2) {
         const id = crypto.randomUUID();
         pairings[id] = {
             id, table: (i/2)+1, aId: pool[i].id, bId: pool[i+1]?.id || null,
-            result: { 
-                outcome: pool[i+1] ? "NONE" : "BYE", 
-                a: { primary: 0, secondary: 0, paint: 0, extra: 0 }, 
-                b: { primary: 0, secondary: 0, paint: 0, extra: 0 } 
-            }
+            result: { outcome: pool[i+1] ? "NONE" : "BYE", a: {}, b: {} }
         };
     }
-    update(ref(db, `tournament/rounds/${currentRoundIdx}/pairings`), pairings).then(() => alert("Pairings Generated!"));
+    update(ref(db, `tournament/rounds/${rIdx}/pairings`), pairings);
 };
 
-// --- GLOBAL SCOPED FUNCTIONS ---
-
-window.saveMatchScore = (matchId) => {
-    const roundIdx = state.rounds.findIndex(r => r.id === state.activeRoundId);
-    if (roundIdx === -1) return;
-
-    const pairings = state.rounds[roundIdx].pairings;
-    const matchKey = Object.keys(pairings).find(key => pairings[key].id === matchId);
-    
-    const container = document.querySelector(`[data-mid="${matchId}"]`).closest('td');
-    const getVal = (side, type) => container.querySelector(`[data-side="${side}"][data-type="${type}"]`)?.value || 0;
-
-    const result = {
+window.saveMatchScore = (mId) => {
+    const rIdx = state.rounds.findIndex(r => r.id === state.activeRoundId);
+    const mKey = Object.keys(state.rounds[rIdx].pairings).find(k => state.rounds[rIdx].pairings[k].id === mId);
+    const container = document.querySelector(`[data-mid="${mId}"]`).closest('.card');
+    const getVal = (s, t) => container.querySelector(`[data-side="${s}"][data-type="${t}"]`).value || 0;
+    const res = {
         outcome: container.querySelector(".outcome-select").value,
-        a: { primary: getVal('a', 'primary'), secondary: getVal('a', 'secondary'), paint: getVal('a', 'paint'), extra: getVal('a', 'extra') },
-        b: { primary: getVal('b', 'primary'), secondary: getVal('b', 'secondary'), paint: getVal('b', 'paint'), extra: getVal('b', 'extra') }
+        a: { primary: getVal('a','primary'), secondary: getVal('a','secondary'), paint: getVal('a','paint'), extra: getVal('a','extra') },
+        b: { primary: getVal('b','primary'), secondary: getVal('b','secondary'), paint: getVal('b', 'paint'), extra: getVal('b', 'extra') }
     };
-
-    update(ref(db, `tournament/rounds/${roundIdx}/pairings/${matchKey}/result`), result).then(() => alert("Score Saved!"));
+    update(ref(db, `tournament/rounds/${rIdx}/pairings/${mKey}/result`), res).then(() => alert("Saved!"));
 };
 
-window.removePlayer = (id) => {
-    if(!isAdmin) return;
-    remove(ref(db, 'tournament/players/' + id));
-};
+window.removePlayer = (id) => isAdmin && remove(ref(db, 'tournament/players/' + id));
 
-document.getElementById("btnReset").onclick = () => {
-    if (isAdmin && confirm("Wipe tournament?")) {
-        set(ref(db, 'tournament/'), null).then(() => location.reload());
-    }
-};
+document.getElementById("btnReset").onclick = () => isAdmin && confirm("Wipe All Data?") && set(ref(db, 'tournament/'), null).then(() => location.reload());
