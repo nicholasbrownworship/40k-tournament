@@ -1,148 +1,80 @@
-/* styles.css — Tactical Ops Command Console */
+/* styles.css — Complete Tactical Console */
 
 :root {
-  --bg: #05070a;
-  --panel: #0d1117;
-  --border: #21262d;
-  --text: #c9d1d9;
-  --accent: #58a6ff;
-  --danger: #f85149;
-  --success: #3fb950;
-  --warn: #d29922;
-  --glow: rgba(88, 166, 255, 0.15);
+  --bg: #0b0f14;
+  --panel: #121826;
+  --line: #263047;
+  --accent: #8ad1ff;
+  --text: #e8eef6;
+  --muted: rgba(232, 238, 246, 0.6);
+  --danger: #ff6b6b;
 }
 
 body {
   margin: 0;
-  background: var(--bg);
+  background-color: var(--bg);
   color: var(--text);
-  font-family: -apple-system, "Segoe UI", "Roboto", "Courier New", monospace;
-  letter-spacing: 0.02em;
+  font-family: 'Segoe UI', Roboto, sans-serif;
 }
 
-.wrap {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 30px 15px;
+.wrap { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+/* --- THE MISSING TAB LOGIC --- */
+.tabBody { 
+  display: none !important; 
 }
 
-/* ---------------- Card & Section Headers ---------------- */
+.tabBody.active { 
+  display: block !important; 
+}
 
+/* --- Professional UI Styling --- */
 .card {
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-  margin-bottom: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  margin-bottom: 24px;
 }
-
-.cardHeader {
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(255,255,255,0.02);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-h1, h2, h3 {
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--accent);
-  margin: 0;
-}
-
-/* ---------------- Data Tables (Readability) ---------------- */
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-th {
-  text-align: left;
-  padding: 12px 16px;
-  color: #8b949e;
-  font-size: 12px;
-  border-bottom: 2px solid var(--border);
-}
-
-td {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-tr:hover td {
-  background: rgba(255,255,255,0.02);
-}
-
-/* ---------------- UI Buttons ---------------- */
-
-.btn {
-  background: #21262d;
-  border: 1px solid #30363d;
-  color: #c9d1d9;
-  padding: 6px 16px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  text-transform: uppercase;
-  transition: 0.2s ease;
-}
-
-.btn:hover {
-  background: #30363d;
-  border-color: #8b949e;
-}
-
-.btn.primary {
-  background: #238636;
-  border-color: rgba(240,246,252,0.1);
-  color: white;
-}
-
-.btn.primary:hover { background: #2ea043; }
-
-.btn.danger {
-  color: var(--danger);
-  border-color: rgba(248,81,73,0.2);
-}
-
-.btn.danger:hover { background: #da3633; color: white; }
-
-/* ---------------- Form Fields ---------------- */
-
-input, select {
-  background: #0d1117;
-  border: 1px solid #30363d;
-  color: white;
-  padding: 8px 12px;
-  border-radius: 6px;
-  outline: none;
-}
-
-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--glow); }
-
-/* ---------------- Tabs ---------------- */
 
 .tabs {
+  background: rgba(0,0,0,0.3);
   display: flex;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--line);
 }
 
 .tab {
-  padding: 12px 20px;
+  padding: 15px 25px;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  color: #8b949e;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
   border-bottom: 2px solid transparent;
 }
 
 .tab.active {
-  color: white;
-  border-bottom-color: #f78166; /* Orange Tactical Accent */
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: rgba(138, 209, 255, 0.05);
 }
+
+/* Tables for Standings/Pairings */
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th { text-align: left; padding: 12px; font-size: 11px; color: var(--muted); text-transform: uppercase; border-bottom: 2px solid var(--line); }
+td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; }
+
+/* Buttons */
+.btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.btn.primary { border-color: var(--accent); color: var(--accent); }
+.btn.danger { border-color: var(--danger); color: var(--danger); }
