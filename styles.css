@@ -1,4 +1,4 @@
-/* styles.css - Tactical UI v3.0 */
+/* style.css - Tactical UI v3.2 */
 :root {
     --bg: #0d1117;
     --card: #161b22;
@@ -16,6 +16,9 @@ body {
     margin: 0;
 }
 
+/* Ensure hidden elements stay hidden */
+[hidden] { display: none !important; }
+
 .ops-wrapper { max-width: 1000px; margin: 0 auto; padding: 20px; }
 
 .ops-header {
@@ -26,20 +29,6 @@ body {
     padding-bottom: 10px;
     margin-bottom: 20px;
 }
-
-/* Timer Deck Styling */
-.timer-deck {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #090c10;
-    padding: 15px 25px;
-    border: 1px solid var(--accent);
-    box-shadow: 0 0 10px rgba(88, 166, 255, 0.1);
-}
-
-.timer-display { font-family: 'Courier New', monospace; font-weight: bold; }
-#timerClock { font-size: 28px; color: var(--accent); margin-left: 10px; }
 
 .card {
     background: var(--card);
@@ -74,6 +63,25 @@ body {
     border-bottom: 2px solid var(--accent);
 }
 
+/* Scoring Grid - This makes the 4 boxes look professional */
+.form-grid {
+    display: flex;
+    gap: 8px;
+    margin-top: 5px;
+    flex-wrap: wrap;
+}
+
+.score-input {
+    width: 60px;
+    background: #0d1117;
+    border: 1px solid var(--border);
+    color: white;
+    padding: 8px;
+    border-radius: 6px;
+    text-align: center;
+    font-weight: bold;
+}
+
 /* Table Styling */
 table { width: 100%; border-collapse: collapse; margin-top: 10px; }
 th { text-align: left; color: #8b949e; font-size: 12px; text-transform: uppercase; padding: 10px; border-bottom: 2px solid var(--border); }
@@ -88,21 +96,24 @@ td { padding: 12px 10px; border-bottom: 1px solid var(--border); }
     color: var(--text);
     cursor: pointer;
     font-weight: 600;
+    transition: background 0.2s;
 }
 
-.btn-primary { background: #238636; border-color: rgba(240,246,252,0.1); }
-.btn-success { background: #1f6feb; border: none; }
+.btn-primary { background: var(--accent); color: white; border: none; }
+.btn-success { background: var(--success); color: white; border: none; }
 .btn-danger { color: #f85149; }
 
-/* Expanded Form & Scoring Layout */
-.form-grid { display: flex; gap: 15px; margin-bottom: 15px; align-items: flex-end; }
-.score-input { 
-    width: 60px; 
-    text-align: center; 
-    font-weight: bold; 
-    border-color: var(--border); 
+.btn:hover { filter: brightness(1.2); }
+
+/* Timer Deck */
+.timer-deck {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #090c10;
+    padding: 15px 25px;
+    border: 1px solid var(--accent);
+    box-shadow: 0 0 10px rgba(88, 166, 255, 0.1);
 }
 
-.input-group { flex: 1; display: flex; flex-direction: column; }
-input { background: #0d1117; border: 1px solid var(--border); color: white; padding: 8px; border-radius: 6px; margin-top: 5px; }
-.notice { background: rgba(88,166,255,0.1); border: 1px solid var(--accent); padding: 15px; border-radius: 6px; margin-top: 15px; }
+#timerClock { font-size: 24px; color: var(--accent); font-weight: bold; font-family: monospace; }
