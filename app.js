@@ -23,6 +23,7 @@ const ADMIN_EMAIL = "nicholasbrownworship@gmail.com";
 let state = { players: [], rounds: [], activeRoundId: null, pending: [] };
 let timerInterval = null;
 let lastNotifiedMins = null;
+let lastSeenRoundId = localStorage.getItem('lastSeenRoundId');
 
 // --- DATA SYNC ---
 onValue(ref(db, 'tournament/'), (snapshot) => {
@@ -31,7 +32,9 @@ onValue(ref(db, 'tournament/'), (snapshot) => {
     state.rounds = data.rounds ? Object.values(data.rounds) : [];
     state.activeRoundId = data.activeRoundId || null;
     state.pending = data.pending ? Object.values(data.pending) : [];
+    
     handleTimerSync(data.timer);
+    checkNewPairings(data.activeRoundId);
     renderAll();
 });
 
@@ -44,21 +47,40 @@ onAuthStateChanged(auth, (user) => {
         document.getElementById("viewLogin").hidden = true;
         document.getElementById("viewApp").hidden = false;
         document.getElementById("userBadge").innerText = `User: ${user.displayName}`;
-        document.querySelectorAll(".admin-only").forEach(el => {
-            el.hidden = !isAdmin;
-            if (isAdmin) el.style.display = 'block';
-        });
+        document.querySelectorAll(".admin-only").forEach(el => { el.hidden = !isAdmin; if (isAdmin) el.style.display = 'block'; });
         renderAll();
     }
 });
 
-// --- TIMER ---
-function syncTimer(minutes) {
-    if (!isAdmin) return;
-    const endTime = Date.now() + (minutes * 60 * 1000);
-    set(ref(db, 'tournament/timer'), { endTime, active: true });
+// --- NEW PAIRINGS POPUP LOGIC ---
+function checkNewPairings(currentRoundId) {
+    if (!currentUser || isAdmin || !currentRoundId) return;
+    
+    // If the round ID has changed since we last "dismissed" the modal
+    if (currentRoundId !== lastSeenRoundId) {
+        const round = state.rounds.find(r => r.id === currentRoundId);
+        if (!round || !round.pairings) return;
+
+        const myMatch = Object.values(round.pairings).find(m => m.aId === currentUser.uid || m.bId === currentUser.uid);
+        if (myMatch) {
+            const opp = myMatch.aId === currentUser.uid ? state.players.find(p => p.id === myMatch.bId) : state.players.find(p => p.id === myMatch.aId);
+            
+            document.getElementById("modalRoundName").innerText = round.label;
+            document.getElementById("modalTableNum").innerText = myMatch.table;
+            document.getElementById("modalOpponent").innerText = opp ? `Vs. ${opp.name}` : "Vs. BYE";
+            document.getElementById("pairingsModal").style.display = 'flex';
+            document.getElementById("notifSound").play().catch(() => {});
+        }
+    }
 }
 
+window.closeModal = () => {
+    lastSeenRoundId = state.activeRoundId;
+    localStorage.setItem('lastSeenRoundId', lastSeenRoundId);
+    document.getElementById("pairingsModal").style.display = 'none';
+};
+
+// --- TIMER ---
 function handleTimerSync(timerData) {
     if (timerInterval) clearInterval(timerInterval);
     if (!timerData || !timerData.active) return document.getElementById("timerClock").innerText = "00:00";
@@ -66,13 +88,17 @@ function handleTimerSync(timerData) {
         const distance = timerData.endTime - Date.now();
         const mins = Math.floor(distance / 60000);
         const secs = Math.floor((distance % 60000) / 1000);
+        const timeStr = `${mins}:${secs < 10 ? '0'+secs : secs}`;
+        
+        document.getElementById("timerClock").innerText = timeStr;
+        document.getElementById("modalTimer").innerText = timeStr;
+
         if (distance <= 0) {
             clearInterval(timerInterval);
             document.getElementById("timerClock").innerText = "TIME UP";
             if (lastNotifiedMins !== 0) triggerAlert("ROUND OVER!", 0);
             return;
         }
-        document.getElementById("timerClock").innerText = `${mins}:${secs < 10 ? '0'+secs : secs}`;
         if ([15, 5, 1].includes(mins) && lastNotifiedMins !== mins) triggerAlert(`${mins} MINS REMAINING`, mins);
     }, 1000);
 }
@@ -98,8 +124,6 @@ function renderAll() {
 function renderHistory() {
     const container = document.getElementById("historyContainer");
     if (!container || !isAdmin) return;
-    if (state.rounds.length === 0) return container.innerHTML = "<p>No rounds yet.</p>";
-
     container.innerHTML = state.rounds.map((round, rIdx) => `
         <div class="round-block">
             <h4>${round.label}</h4>
@@ -108,45 +132,35 @@ function renderHistory() {
                     const finished = m.result && m.result.outcome !== "NONE";
                     const pA = state.players.find(p => p.id === m.aId);
                     const pB = state.players.find(p => p.id === m.bId);
-                    return `
-                        <div class="card" style="font-size: 0.75rem; border: 1px solid #eee;">
-                            <strong>Table ${m.table}</strong><br>
-                            ${pA?.name || 'Empty'} vs ${pB?.name || 'BYE'}<br>
-                            <div class="${finished ? 'status-finished' : 'status-playing'}" style="margin: 5px 0;">
-                                ${finished ? 'SAVED' : 'LIVE'}
-                            </div>
-                            <button class="btn btn-sm" style="width:100%" onclick="editScore('${round.id}', '${m.id}')">Edit</button>
-                        </div>`;
+                    return `<div class="card" style="font-size: 0.7rem; border: 1px solid #eee;">
+                        <strong>T-${m.table}</strong>: ${pA?.name || 'Empty'} vs ${pB?.name || 'BYE'}
+                        <div class="${finished ? 'status-finished' : 'status-playing'}" style="margin: 5px 0;">${finished ? 'DONE' : 'LIVE'}</div>
+                        <button class="btn btn-sm" style="width:100%" onclick="editScore('${round.id}', '${m.id}')">Edit</button>
+                    </div>`;
                 }).join('')}
             </div>
-        </div>
-    `).join('');
+        </div>`).join('');
 }
 
 function renderPairings() {
     const container = document.getElementById("pairingsContainer");
     const activeRound = state.rounds.find(r => r.id === state.activeRoundId);
-    if (!activeRound) return container.innerHTML = "<p class='card'>No active round.</p>";
-
+    if (!activeRound) return container.innerHTML = "<p class='card'>Waiting for round...</p>";
     const pairings = Object.values(activeRound.pairings || {});
     const toShow = isAdmin ? pairings : pairings.filter(m => m.aId === currentUser?.uid || m.bId === currentUser?.uid);
-
-    container.innerHTML = `<h3>Currently Viewing: ${activeRound.label}</h3>` + toShow.map(m => {
+    container.innerHTML = `<h3>Viewing: ${activeRound.label}</h3>` + toShow.map(m => {
         const pA = state.players.find(p => p.id === m.aId);
         const pB = state.players.find(p => p.id === m.bId);
         const r = m.result || { outcome: "NONE", a: {}, b: {} };
         const fields = (side, name) => `
-            <div style="margin-bottom:8px;">
-                <label style="font-size:0.7rem; font-weight:bold;">${name}</label>
+            <div style="margin-bottom:8px;"><label style="font-size:0.7rem; font-weight:bold;">${name}</label>
                 <div class="form-grid">
                     <input type="number" data-mid="${m.id}" data-side="${side}" data-type="primary" value="${r[side]?.primary || 0}" placeholder="Pri">
                     <input type="number" data-mid="${m.id}" data-side="${side}" data-type="secondary" value="${r[side]?.secondary || 0}" placeholder="Sec">
                     <input type="number" data-mid="${m.id}" data-side="${side}" data-type="paint" value="${r[side]?.paint || 10}" placeholder="Pnt">
-                </div>
-            </div>`;
+                </div></div>`;
         return `<div class="card"><strong>Table ${m.table}</strong>
-            ${fields('a', pA?.name || 'A')}
-            ${pB ? fields('b', pB.name) : '<strong>BYE</strong>'}
+            ${fields('a', pA?.name || 'A')} ${pB ? fields('b', pB.name) : '<strong>BYE</strong>'}
             <div style="margin-top:10px; display:flex; gap:10px;">
                 <select class="outcome-select" data-mid="${m.id}">
                     <option value="NONE" ${r.outcome === 'NONE' ? 'selected' : ''}>Pending</option>
@@ -162,8 +176,7 @@ function renderPlayers() {
     const tbody = document.querySelector("#playersTable tbody");
     if (tbody) tbody.innerHTML = state.players.map((p, i) => `
         <tr style="${p.dropped ? 'opacity:0.5' : ''}"><td>${i+1}</td><td>${p.name} ${p.dropped ? '(D)' : ''}</td><td>${p.faction}</td>
-        <td>${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">X</button>
-            <button class="btn btn-warning btn-sm" onclick="toggleDrop('${p.id}', ${p.dropped || false})">${p.dropped ? 'In' : 'Out'}</button>` : '-'}</td></tr>`).join('');
+        <td>${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">X</button><button class="btn btn-warning btn-sm" onclick="toggleDrop('${p.id}', ${p.dropped || false})">${p.dropped ? 'In' : 'Out'}</button>` : '-'}</td></tr>`).join('');
 }
 
 function renderStandings() {
@@ -175,9 +188,7 @@ function renderStandings() {
 function renderPending() {
     const list = document.getElementById("pendingList");
     if (!list || !isAdmin) return;
-    list.innerHTML = state.pending.length === 0 ? "<p>No requests.</p>" : state.pending.map(p => `
-        <div class="pending-item"><span>${p.name} (${p.faction})</span>
-        <button class="btn btn-success btn-sm" onclick="approvePlayer('${p.id}')">Approve</button></div>`).join('');
+    list.innerHTML = state.pending.length === 0 ? "<p>No requests.</p>" : state.pending.map(p => `<div class="pending-item"><span>${p.name} (${p.faction})</span><button class="btn btn-success btn-sm" onclick="approvePlayer('${p.id}')">Approve</button></div>`).join('');
 }
 
 // --- LOGIC ---
@@ -199,13 +210,7 @@ function computeStandings() {
 }
 
 // --- ACTIONS ---
-window.editScore = (roundId, matchId) => {
-    state.activeRoundId = roundId;
-    document.querySelector('[data-tab="pairings"]').click();
-    alert("Switching to " + state.rounds.find(r => r.id === roundId).label + " for editing.");
-    renderPairings();
-};
-
+window.editScore = (roundId, matchId) => { state.activeRoundId = roundId; document.querySelector('[data-tab="pairings"]').click(); renderPairings(); };
 window.saveScore = (mId) => {
     const rIdx = state.rounds.findIndex(r => r.id === state.activeRoundId);
     const mKey = Object.keys(state.rounds[rIdx].pairings).find(k => state.rounds[rIdx].pairings[k].id === mId);
@@ -214,7 +219,7 @@ window.saveScore = (mId) => {
     const res = { outcome: card.querySelector(".outcome-select").value, a: { primary: getV('a','primary'), secondary: getV('a','secondary'), paint: getV('a','paint') }, b: { primary: getV('b','primary'), secondary: getV('b','secondary'), paint: getV('b','paint') } };
     update(ref(db, `tournament/rounds/${rIdx}/pairings/${mKey}/result`), res).then(() => alert("Saved!"));
 };
-
+function syncTimer(minutes) { const endTime = Date.now() + (minutes * 60 * 1000); set(ref(db, 'tournament/timer'), { endTime, active: true }); }
 document.getElementById("btnSetTimer").onclick = () => syncTimer(document.getElementById("timerInput").value);
 document.getElementById("btnAddPlayer").onclick = () => {
     const n = document.getElementById("newPlayerName").value;
