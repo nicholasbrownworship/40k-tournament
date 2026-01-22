@@ -5,20 +5,20 @@ const $ = (sel, root = document) => root.querySelector(sel);
 
 function escapeHtml(str) {
   return String(str ?? "").replace(/[&<>\"']/g, m => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;"
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
   }[m]));
 }
 
-/** Helper to create elements with attributes in one go */
+/** * Improved element creator 
+ * Handles 'value' and 'disabled' as properties for better input rendering
+ */
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (k === "class") node.className = v;
     else if (k === "html") node.innerHTML = v;
+    else if (k === "value") node.value = v; // Set as property
+    else if (k === "disabled") node.disabled = !!v; // Set as property
     else if (k.startsWith("data-")) node.setAttribute(k, v);
     else node.setAttribute(k, v);
   }
@@ -53,7 +53,7 @@ export function renderAll(state) {
   renderStandings(state);
 }
 
-/* ---------------- KPIs (Counters) ---------------- */
+/* ---------------- KPIs ---------------- */
 
 function renderKpis(state) {
   const players = state.players || [];
@@ -73,25 +73,21 @@ function renderKpis(state) {
   setText("kpiMatches", String(matchesLogged));
 }
 
-/* ---------------- Players List ---------------- */
+/* ---------------- Players ---------------- */
 
 function renderPlayers(state) {
-  const table = $("#playersTable tbody") || $("#playersTbody") || $("#playersBody");
+  const table = $("#playersTable tbody") || $("#playersBody");
   if (!table) return;
 
   table.innerHTML = "";
-  const players = state.players || [];
-
-  players.forEach((p, idx) => {
+  (state.players || []).forEach((p, idx) => {
     const tr = el("tr", {}, [
       el("td", { html: String(idx + 1) }),
       el("td", { html: `<strong>${escapeHtml(p.name)}</strong>` }),
       el("td", { html: escapeHtml(p.faction || "—") }),
       el("td", { class: "noPrint" }, [
         el("button", { 
-          class: "mini bad", 
-          html: "Remove", 
-          "data-id": p.id,
+          class: "mini bad", html: "Remove",
           onclick: () => {
             if(!confirm(`Remove ${p.name}?`)) return;
             state.players = state.players.filter(pl => pl.id !== p.id);
@@ -104,104 +100,91 @@ function renderPlayers(state) {
   });
 }
 
-/* ---------------- Rounds Dropdown ---------------- */
+/* ---------------- Rounds ---------------- */
 
 function renderRoundsDropdown(state) {
   const sel = $("#roundSelect");
-  const badge = $("#roundBadge");
   if (!sel) return;
 
   const rounds = state.rounds || [];
   sel.innerHTML = "";
+  sel.disabled = rounds.length === 0;
 
-  if (rounds.length === 0) {
-    if (badge) badge.textContent = "No Rounds";
-    sel.disabled = true;
-    return;
-  }
-
-  sel.disabled = false;
   rounds.forEach(r => {
     const opt = el("option", { value: r.id, html: r.label || `Round ${r.number}` });
     if (r.id === state.activeRoundId) opt.selected = true;
     sel.appendChild(opt);
   });
-
-  const ar = activeRound(state);
-  if (badge) badge.textContent = ar ? (ar.label || `Round ${ar.number}`) : "—";
 }
 
-/* ---------------- Pairings (The Match Table) ---------------- */
+/* ---------------- Pairings (The "Results" Section) ---------------- */
 
 function renderPairings(state) {
-  const host = $("#pairingsTable tbody") || $("#pairingsList") || $("#pairings");
+  // CRITICAL: We look for the container where app.js expects to find .pairingRow
+  const host = $("#pairingsTable tbody") || $("#pairings");
   if (!host) return;
 
   host.innerHTML = "";
   const ar = activeRound(state);
   if (!ar) {
-    host.innerHTML = '<tr><td colspan="7" class="notice">Create a round to begin.</td></tr>';
+    host.innerHTML = '<tr><td colspan="7" class="notice">No round active.</td></tr>';
     return;
   }
 
   const pairings = ar.pairings || [];
-  if (pairings.length === 0) {
-    host.innerHTML = '<tr><td colspan="7" class="notice">No pairings generated. Click "Generate".</td></tr>';
-    return;
-  }
-
-  const isTable = host.tagName.toLowerCase() === "tbody";
-
   pairings.forEach(m => {
     const a = findPlayer(state, m.aId);
     const b = m.bId ? findPlayer(state, m.bId) : null;
     const res = m.result || { outcome: "NONE", aVP: 0, bVP: 0 };
+    const isBye = !m.bId;
 
-    if (isTable) {
-      // Table Row Layout
-      const tr = el("tr", { class: "pairingRow", "data-match-id": m.id }, [
-        el("td", { html: String(m.table) }),
-        el("td", { html: `<strong>${escapeHtml(a?.name || "??")}</strong>` }),
-        el("td", { html: b ? `<strong>${escapeHtml(b.name)}</strong>` : "<em>BYE</em>" }),
-        el("td", {}, [
-          el("select", { class: "input", "data-field": "outcome", disabled: !b }, [
-            el("option", { value: "NONE", html: "—", selected: res.outcome === "NONE" }),
-            el("option", { value: "A", html: "A Win", selected: res.outcome === "A" }),
-            el("option", { value: "B", html: "B Win", selected: res.outcome === "B" }),
-            el("option", { value: "D", html: "Draw", selected: res.outcome === "D" })
-          ])
-        ]),
-        el("td", {}, [
-          el("input", { 
-            type: "number", class: "input", "data-field": "aVP", 
-            value: res.aVP, disabled: !state.meta?.useVP || !b 
-          })
-        ]),
-        el("td", {}, [
-          el("input", { 
-            type: "number", class: "input", "data-field": "bVP", 
-            value: res.bVP, disabled: !state.meta?.useVP || !b 
-          })
-        ]),
-        el("td", { class: "noPrint" }, [
-          el("span", { 
-            class: `badge ${badgeClass(res.outcome)}`, 
-            html: badgeText(res.outcome) 
-          })
+    // We build the row with the class "pairingRow" so app.js can find it
+    const tr = el("tr", { class: "pairingRow", "data-match-id": m.id }, [
+      el("td", { html: String(m.table) }),
+      el("td", { html: `<strong>${escapeHtml(a?.name || "??")}</strong>` }),
+      el("td", { html: b ? `<strong>${escapeHtml(b.name)}</strong>` : "<em>BYE</em>" }),
+      
+      // RESULTS COLUMN: OUTCOME
+      el("td", {}, [
+        el("select", { class: "input", "data-field": "outcome", disabled: isBye }, [
+          el("option", { value: "NONE", html: "—", selected: res.outcome === "NONE" }),
+          el("option", { value: "A", html: "A Win", selected: res.outcome === "A" }),
+          el("option", { value: "B", html: "B Win", selected: res.outcome === "B" }),
+          el("option", { value: "D", html: "Draw", selected: res.outcome === "D" })
         ])
-      ]);
-      host.appendChild(tr);
-    } else {
-      // Div/Card Layout (Fallback)
-      const card = el("div", { class: "pairingRow card", "data-match-id": m.id }, [
-        el("div", { html: `Table ${m.table}: ${a?.name} vs ${b ? b.name : "BYE"}` })
-      ]);
-      host.appendChild(card);
-    }
+      ]),
+
+      // RESULTS COLUMN: VP A
+      el("td", { class: "noPrint" }, [
+        el("input", { 
+          type: "number", class: "input", "data-field": "aVP", 
+          value: res.aVP, disabled: isBye || !state.meta?.useVP 
+        })
+      ]),
+
+      // RESULTS COLUMN: VP B
+      el("td", { class: "noPrint" }, [
+        el("input", { 
+          type: "number", class: "input", "data-field": "bVP", 
+          value: res.bVP, disabled: isBye || !state.meta?.useVP 
+        })
+      ]),
+
+      // STATUS BADGE
+      el("td", { class: "noPrint" }, [
+        el("span", { 
+          class: `badge ${badgeClass(res.outcome, isBye)}`, 
+          html: isBye ? "BYE" : badgeText(res.outcome) 
+        })
+      ])
+    ]);
+    
+    host.appendChild(tr);
   });
 }
 
-function badgeClass(out) {
+function badgeClass(out, isBye) {
+  if (isBye) return "good";
   if (out === "A" || out === "B") return "good";
   if (out === "D") return "warn";
   return "muted";
@@ -210,7 +193,9 @@ function badgeClass(out) {
 function badgeText(out) {
   if (out === "NONE") return "Pending";
   if (out === "D") return "Draw";
-  return out + " Win";
+  if (out === "A") return "A Win";
+  if (out === "B") return "B Win";
+  return "—";
 }
 
 /* ---------------- Standings ---------------- */
@@ -223,7 +208,7 @@ function renderStandings(state) {
   const list = computeStandings(state);
 
   list.forEach(s => {
-    const tr = el("tr", {}, [
+    table.appendChild(el("tr", {}, [
       el("td", { html: String(s.rank) }),
       el("td", { html: `<strong>${escapeHtml(s.name)}</strong>` }),
       el("td", { html: escapeHtml(s.faction || "") }),
@@ -231,7 +216,6 @@ function renderStandings(state) {
       el("td", { html: escapeHtml(s.record) }),
       el("td", { html: state.meta?.useVP ? String(s.vp) : "-" }),
       el("td", { html: String(s.sos) })
-    ]);
-    table.appendChild(tr);
+    ]));
   });
 }
