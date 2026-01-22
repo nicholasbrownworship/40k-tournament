@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tactical Console Cloud</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Utility Styles for Live Monitor */
+        .table-grid {
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); 
+            gap: 10px; 
+            margin-top: 15px;
+        }
+        .status-playing { background-color: #ffc107; color: #212529; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 0.75rem; }
+        .status-finished { background-color: #28a745; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 0.75rem; }
+        .pending-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #ddd; }
+    </style>
 </head>
 <body>
 
@@ -22,15 +34,25 @@
                 <h1 id="eventTitle">Tournament Console</h1>
                 <div id="userBadge" style="font-size: 0.8rem; color: var(--accent);"></div>
             </div>
-            <button id="btnReset" class="btn btn-danger admin-only">Wipe Data</button>
+            <button id="btnReset" class="btn btn-danger admin-only" hidden>Wipe Data</button>
         </header>
 
-        <div id="registrationZone" class="card" hidden>
+        <div id="registrationZone" class="card" style="margin: 20px;" hidden>
             <h3>Join Tournament</h3>
-            <p>Request entry to the roster:</p>
+            <p>Submit your faction to request entry to the roster.</p>
             <div class="form-grid">
-                <input type="text" id="regFaction" placeholder="Enter Your Faction">
+                <input type="text" id="regFaction" placeholder="Your Faction (e.g. Orks)">
                 <button id="btnRequestJoin" class="btn btn-primary">Request to Join</button>
+            </div>
+        </div>
+
+        <div class="timer-deck card" style="margin: 20px; display: flex; justify-content: space-between; align-items: center;">
+            <div class="timer-display">
+                <span>ROUND TIME: </span><span id="timerClock">150:00</span>
+            </div>
+            <div class="timer-controls admin-only" hidden>
+                <input type="number" id="timerInput" value="150" style="width: 60px;">
+                <button id="btnSetTimer" class="btn btn-sm">Set</button>
             </div>
         </div>
 
@@ -57,7 +79,7 @@
         <section id="tab-standings" class="tab-content">
             <div class="card">
                 <table id="standingsTable">
-                    <thead><tr><th>Rank</th><th>Name</th><th>Faction</th><th>Pts</th><th>W-D-L</th><th>VP (Pri)</th></tr></thead>
+                    <thead><tr><th>Rank</th><th>Name</th><th>Faction</th><th>Pts</th><th>W-D-L</th><th>VP</th></tr></thead>
                     <tbody></tbody>
                 </table>
             </div>
@@ -65,26 +87,27 @@
 
         <section id="tab-admin" class="tab-content">
             <div class="card">
+                <h3>Live Table Monitor</h3>
+                <div id="tableMonitor" class="table-grid"></div>
+            </div>
+
+            <div class="card">
                 <h3>Pending Approvals</h3>
-                <div id="pendingList">
-                    <p>No pending requests.</p>
-                </div>
+                <div id="pendingList"></div>
             </div>
 
             <div class="card">
                 <h3>Tournament Control</h3>
-                <div class="form-grid">
-                    <button id="btnNextRound" class="btn">Create Next Round</button>
-                    <button id="btnGeneratePairings" class="btn btn-primary">Generate Pairings</button>
-                </div>
+                <button id="btnNextRound" class="btn">Create Next Round</button>
+                <button id="btnGeneratePairings" class="btn btn-primary">Generate Pairings</button>
             </div>
             
             <div class="card">
-                <h3>Manual Add (TO)</h3>
+                <h3>Manual Entry</h3>
                 <div class="form-grid">
                     <input type="text" id="newPlayerName" placeholder="Player Name">
                     <input type="text" id="newPlayerFaction" placeholder="Faction">
-                    <button id="btnAddPlayer" class="btn btn-success">Add</button>
+                    <button id="btnAddPlayer" class="btn">Add</button>
                 </div>
             </div>
         </section>
