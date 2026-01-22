@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tactical Console Cloud</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="style.css?v=1.2">
 </head>
 <body>
 
@@ -22,17 +22,15 @@
                 <h1 id="eventTitle">Tournament Console</h1>
                 <div id="userBadge" style="font-size: 0.8rem; color: var(--accent);"></div>
             </div>
-            <button id="btnReset" class="btn btn-danger">Wipe Data</button>
+            <button id="btnReset" class="btn btn-danger admin-only">Wipe Data</button>
         </header>
 
-        <div class="timer-deck card">
-            <div class="timer-display">
-                <span>ROUND TIME:</span>
-                <span id="timerClock">150:00</span>
-            </div>
-            <div class="timer-controls">
-                <input type="number" id="timerInput" value="150" style="width: 60px;">
-                <button id="btnSetTimer" class="btn">Set</button>
+        <div id="registrationZone" class="card" hidden>
+            <h3>Join Tournament</h3>
+            <p>Request entry to the roster:</p>
+            <div class="form-grid">
+                <input type="text" id="regFaction" placeholder="Enter Your Faction">
+                <button id="btnRequestJoin" class="btn btn-primary">Request to Join</button>
             </div>
         </div>
 
@@ -44,14 +42,6 @@
         </nav>
 
         <section id="tab-players" class="tab-content active">
-            <div class="card admin-only" hidden>
-                <h3>Register Player</h3>
-                <div class="form-grid">
-                    <input type="text" id="newPlayerName" placeholder="Player Name">
-                    <input type="text" id="newPlayerFaction" placeholder="Faction">
-                    <button id="btnAddPlayer" class="btn btn-success">Add</button>
-                </div>
-            </div>
             <div class="card">
                 <table id="playersTable">
                     <thead><tr><th>#</th><th>Name</th><th>Faction</th><th>Action</th></tr></thead>
@@ -75,9 +65,27 @@
 
         <section id="tab-admin" class="tab-content">
             <div class="card">
+                <h3>Pending Approvals</h3>
+                <div id="pendingList">
+                    <p>No pending requests.</p>
+                </div>
+            </div>
+
+            <div class="card">
                 <h3>Tournament Control</h3>
-                <button id="btnNextRound" class="btn">Create Next Round</button>
-                <button id="btnGeneratePairings" class="btn btn-primary">Generate Pairings & Start Clock</button>
+                <div class="form-grid">
+                    <button id="btnNextRound" class="btn">Create Next Round</button>
+                    <button id="btnGeneratePairings" class="btn btn-primary">Generate Pairings</button>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>Manual Add (TO)</h3>
+                <div class="form-grid">
+                    <input type="text" id="newPlayerName" placeholder="Player Name">
+                    <input type="text" id="newPlayerFaction" placeholder="Faction">
+                    <button id="btnAddPlayer" class="btn btn-success">Add</button>
+                </div>
             </div>
         </section>
     </div>
