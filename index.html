@@ -3,114 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Warhammer 40K Tournament Ops</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Tactical Console Cloud</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="ops-wrapper">
+
+    <div id="viewLogin" class="ops-wrapper">
+        <div class="card" style="text-align:center; margin-top: 50px;">
+            <h1>Tactical Console</h1>
+            <p>Sign in to access your pairings and input scores.</p>
+            <button id="btnLogin" class="btn btn-primary">Sign in with Google</button>
+        </div>
+    </div>
+
+    <div id="viewApp" class="ops-wrapper" hidden>
         <header class="ops-header">
-            <div class="brand">
-                <h1>Tactical Console <span class="v-tag">v2.0</span></h1>
+            <div>
+                <h1 id="eventTitle">Tournament Console</h1>
+                <div id="userBadge" style="font-size: 0.8rem; color: var(--accent);"></div>
             </div>
-            <div class="global-actions">
-                <button id="btnReset" class="btn btn-danger">Wipe Data</button>
-            </div>
+            <button id="btnReset" class="btn btn-danger">Wipe Data</button>
         </header>
 
-        <main id="viewLanding" class="view">
-            <div class="card setup-card">
-                <h2>Event Initialization</h2>
+        <div class="timer-deck card">
+            <div class="timer-display">
+                <span>ROUND TIME:</span>
+                <span id="timerClock">150:00</span>
+            </div>
+            <div class="timer-controls">
+                <input type="number" id="timerInput" value="150" style="width: 60px;">
+                <button id="btnSetTimer" class="btn">Set</button>
+            </div>
+        </div>
+
+        <nav class="tabs">
+            <button class="tab active" data-tab="players">Players</button>
+            <button class="tab" data-tab="pairings">My Match</button>
+            <button class="tab" data-tab="standings">Standings</button>
+            <button class="tab admin-only" data-tab="admin" hidden>TO Tools</button>
+        </nav>
+
+        <section id="tab-players" class="tab-content active">
+            <div class="card admin-only" hidden>
+                <h3>Register Player</h3>
                 <div class="form-grid">
-                    <div class="input-group">
-                        <label>Event Name</label>
-                        <input id="lEventName" value="Grand Tournament 2026">
-                    </div>
-                    <div class="input-group">
-                        <label>Players</label>
-                        <input id="lPlayers" type="number" value="8">
-                    </div>
-                </div>
-                <div class="actions">
-                    <button id="btnRecommend" class="btn btn-primary">Run Recommendation</button>
-                </div>
-                <div id="recommendBox" class="notice" hidden>
-                    <div id="recommendText"></div>
-                    <button id="btnBuildRecommended" class="btn btn-success">Initialize Event</button>
+                    <input type="text" id="newPlayerName" placeholder="Player Name">
+                    <input type="text" id="newPlayerFaction" placeholder="Faction">
+                    <button id="btnAddPlayer" class="btn btn-success">Add</button>
                 </div>
             </div>
-        </main>
-
-        <main id="viewApp" class="view" hidden>
-            <div class="card event-status">
-                <h2 id="eventTitle">Event Dashboard</h2>
-                <nav class="tabs">
-                    <button class="tab active" data-tab="players">Players</button>
-                    <button class="tab" data-tab="pairings">Rounds & Scoring</button>
-                    <button class="tab" data-tab="standings">Leaderboard</button>
-                </nav>
+            <div class="card">
+                <table id="playersTable">
+                    <thead><tr><th>#</th><th>Name</th><th>Faction</th><th>Action</th></tr></thead>
+                    <tbody></tbody>
+                </table>
             </div>
+        </section>
 
-            <div class="timer-deck card">
-    <div class="timer-display">
-        <span id="timerLabel">ROUND TIME:</span>
-        <span id="timerClock">150:00</span>
+        <section id="tab-pairings" class="tab-content">
+            <div id="pairingsContainer"></div>
+        </section>
+
+        <section id="tab-standings" class="tab-content">
+            <div class="card">
+                <table id="standingsTable">
+                    <thead><tr><th>Rank</th><th>Name</th><th>Faction</th><th>Pts</th><th>W-D-L</th><th>VP (Pri)</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="tab-admin" class="tab-content">
+            <div class="card">
+                <h3>Tournament Control</h3>
+                <button id="btnNextRound" class="btn">Create Next Round</button>
+                <button id="btnGeneratePairings" class="btn btn-primary">Generate Pairings & Start Clock</button>
+            </div>
+        </section>
     </div>
-    <div class="timer-controls">
-        <input type="number" id="timerInput" value="150" style="width: 60px;">
-        <button id="btnSetTimer" class="btn">Set Minutes</button>
-    </div>
-</div>
 
-            <section id="tab-players" class="tab-content active">
-                <div class="card">
-                    <h3>Add New Combatant</h3>
-                    <div class="form-grid">
-                        <input id="newPlayerName" placeholder="Player Name">
-                        <input id="newPlayerFaction" placeholder="Faction (e.g. Necrons)">
-                        <button id="btnAddPlayer" class="btn btn-primary">Register Player</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <table id="playersTable">
-                        <thead><tr><th>#</th><th>Name</th><th>Faction</th><th>Action</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </section>
-
-            <section id="tab-pairings" class="tab-content">
-                <div class="card control-bar">
-                    <div class="round-nav">
-                        <select id="roundSelect"></select>
-                        <button id="btnNextRound" class="btn">New Round</button>
-                    </div>
-                    <div class="round-actions">
-                        <button id="btnGeneratePairings" class="btn btn-primary">Auto-Pair Players</button>
-                        <button id="btnSaveResults" class="btn btn-success">Commit Scores</button>
-                    </div>
-                </div>
-                <div id="pairingsContainer"></div>
-            </section>
-
-            <section id="tab-standings" class="tab-content">
-                <div class="card">
-                   <table id="standingsTable">
-    <thead>
-        <tr>
-            <th>Rank</th>
-            <th>Name</th>
-            <th>Faction</th>
-            <th>Points</th>
-            <th>Record</th>
-            <th>Total VP</th>
-        </tr>
-    </thead>
-    <tbody></tbody>
-</table>
-                </div>
-            </section>
-        </main>
-    </div>
     <script type="module" src="app.js"></script>
 </body>
 </html>
