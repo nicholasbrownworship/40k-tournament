@@ -25,7 +25,7 @@ const provider = new GoogleAuthProvider();
 // 4. App State & Admin Settings
 let currentUser = null;
 let isAdmin = false; 
-const ADMIN_EMAIL = "your-email@gmail.com"; // UPDATE THIS to your Gmail to see TO tools
+const ADMIN_EMAIL = "nicholasbrownworship@gmail.com"; // UPDATE THIS to your Gmail to see TO tools
 
 let state = { players: [], rounds: [], activeRoundId: null };
 
