@@ -1,181 +1,178 @@
-/* styles.css — 40K Tournament Ops (Refined Console) */
+/* styles.css — 40K Tactical Console (Professional Gritty Look) */
 
 :root {
   --bg: #0b0f14;
   --panel: #121826;
-  --panel2: #0e1522;
   --line: #263047;
-  --line2: #384a70;
+  --line-bright: #384a70;
   --text: #e8eef6;
-  --muted: rgba(232, 238, 246, 0.72);
-  --muter: rgba(232, 238, 246, 0.52);
-
-  --good: #2bd4a6;
-  --warn: #ffcc66;
-  --bad: #ff6b6b;
-
-  --accent: #8ad1ff;
-  --accent2: #c8ff8a;
-
-  --shadow: 0 14px 40px rgba(0, 0, 0, .35);
-  --r12: 12px;
-  --r16: 16px;
-  --r18: 18px;
+  --muted: rgba(232, 238, 246, 0.6);
   
-  /* Readability Boost */
-  --font-main: "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --lh: 1.6;
+  --accent: #8ad1ff;   /* Power Blue */
+  --accent-glow: rgba(138, 209, 255, 0.2);
+  --good: #2bd4a6;     /* Plasma Green */
+  --bad: #ff6b6b;      /* Warning Red */
+  
+  --r-small: 8px;
+  --r-med: 14px;
+  
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
-
-* { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: var(--font-main);
-  line-height: var(--lh);
+  background-color: var(--bg);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(138, 209, 255, 0.05) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(43, 212, 166, 0.03) 0px, transparent 50%);
   color: var(--text);
-  background: 
-    radial-gradient(1200px 800px at 10% -10%, rgba(138, 209, 255, .08), transparent 55%),
-    var(--bg);
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
 .wrap {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 20px;
 }
 
-/* ---------------- Typography ---------------- */
+/* ---------------- Professional Headers ---------------- */
 
-h1, h2, h3 { 
-  letter-spacing: -0.02em; 
-  font-weight: 700;
+.brand h1 {
+  font-size: 1.2rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin: 0;
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent-glow);
 }
 
-.brand h1 { font-size: 22px; margin: 0; color: var(--accent); }
-.brand .sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
-
-/* ---------------- Tables (New) ---------------- */
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 10px 0;
-  font-size: 14px;
-}
-
-th {
-  text-align: left;
-  padding: 12px;
-  color: var(--muter);
-  font-size: 11px;
+.brand .sub {
+  font-size: 0.75rem;
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 1px;
-  border-bottom: 1px solid var(--line);
 }
 
-td {
-  padding: 14px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  vertical-align: middle;
-}
-
-tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-/* ---------------- Buttons ---------------- */
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  cursor: pointer;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text);
-  padding: 10px 16px;
-  border-radius: var(--r12);
-  font-weight: 600;
-  font-size: 13px;
-  transition: all 0.2s ease;
-}
-
-.btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: var(--line2);
-  transform: translateY(-1px);
-}
-
-.btn.primary { background: var(--accent); color: #000; border: none; }
-.btn.primary:hover { filter: brightness(1.1); }
-
-.btn.danger {
-  color: var(--bad);
-  border-color: rgba(255, 107, 107, 0.3);
-}
-
-.btn.danger:hover {
-  background: rgba(255, 107, 107, 0.1);
-  border-color: var(--bad);
-}
-
-/* ---------------- Forms & Inputs ---------------- */
-
-.input, select {
-  background: #000;
-  border: 1px solid var(--line);
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 14px;
-}
-
-.input:focus { border-color: var(--accent); outline: none; }
-
-/* ---------------- Badges ---------------- */
-
-.badge {
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.badge.good { background: rgba(43, 212, 166, 0.15); color: var(--good); }
-.badge.warn { background: rgba(255, 204, 102, 0.15); color: var(--warn); }
-.badge.muted { background: rgba(255, 255, 255, 0.05); color: var(--muter); }
-
-/* ---------------- Components ---------------- */
+/* ---------------- Tactical Cards ---------------- */
 
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--r18);
-  box-shadow: var(--shadow);
-  overflow: hidden;
+  border-radius: var(--r-med);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
   margin-bottom: 24px;
+  overflow: hidden;
 }
 
-.tabs {
-  background: rgba(0,0,0,0.2);
-  padding: 10px 20px;
+.cardHeader {
+  background: rgba(255,255,255,0.03);
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
   display: flex;
-  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ---------------- Readable Tactical Tables ---------------- */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th {
+  background: rgba(0,0,0,0.2);
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 2px solid var(--line);
+}
+
+td {
+  padding: 14px 15px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  font-size: 0.9rem;
+}
+
+tr:hover td {
+  background: rgba(138, 209, 255, 0.03);
+}
+
+/* ---------------- UI Components ---------------- */
+
+.btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 8px 16px;
+  border-radius: var(--r-small);
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+  background: rgba(138, 209, 255, 0.1);
+  box-shadow: 0 0 15px var(--accent-glow);
+}
+
+.btn.primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn.danger {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.btn.danger:hover {
+  background: rgba(255, 107, 107, 0.1);
+  box-shadow: 0 0 15px rgba(255, 107, 107, 0.2);
+}
+
+input, select {
+  background: #000;
+  border: 1px solid var(--line);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: var(--r-small);
+  font-family: inherit;
+}
+
+input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* ---------------- Tabs ---------------- */
+
+.tabs {
+  background: rgba(0,0,0,0.3);
+  padding: 0 20px;
+  display: flex;
   border-bottom: 1px solid var(--line);
 }
 
 .tab {
-  padding: 6px 14px;
-  border-radius: 8px;
+  padding: 15px 20px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--muted);
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--muter);
+  border-bottom: 2px solid transparent;
+  transition: 0.2s;
 }
 
-.tab.active { color: var(--accent); background: rgba(138, 209, 255, 0.1); }
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
