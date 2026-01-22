@@ -1,4 +1,4 @@
-/* app.js - Tactical Engine v2.2 (Stability Fix) */
+/* app.js - Tactical Engine v2.3 (Point-Bracket Randomization) */
 
 let state = {
     players: [],
@@ -125,7 +125,6 @@ function renderStandings() {
 
 document.addEventListener("DOMContentLoaded", () => {
     
-    // 1. Recommend Logic
     document.getElementById("btnRecommend").onclick = () => {
         const pCount = document.getElementById("lPlayers").value || 8;
         const rounds = Math.ceil(Math.log2(pCount));
@@ -137,7 +136,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    // 2. Build Logic
     document.getElementById("btnBuildRecommended").onclick = () => {
         state.meta.name = document.getElementById("lEventName").value || "40K Tournament";
         document.getElementById("viewLanding").hidden = true;
@@ -146,7 +144,6 @@ document.addEventListener("DOMContentLoaded", () => {
         renderAll();
     };
 
-    // 3. Player Logic
     document.getElementById("btnAddPlayer").onclick = () => {
         const nInput = document.getElementById("newPlayerName");
         const fInput = document.getElementById("newPlayerFaction");
@@ -156,7 +153,6 @@ document.addEventListener("DOMContentLoaded", () => {
         renderAll();
     };
 
-    // 4. Round Logic
     document.getElementById("btnNextRound").onclick = () => {
         const round = { id: crypto.randomUUID(), label: `Round ${state.rounds.length + 1}`, pairings: [] };
         state.rounds.push(round);
@@ -168,11 +164,27 @@ document.addEventListener("DOMContentLoaded", () => {
         const round = state.rounds.find(r => r.id === state.activeRoundId);
         if (!round || state.players.length < 2) return;
 
-        let pool;
+        let pool = [];
         if (state.rounds.length === 1) {
+            // Round 1: Total Random
             pool = [...state.players].sort(() => 0.5 - Math.random());
         } else {
-            pool = computeStandings();
+            // Round 2+: Point-Bracket Randomization
+            const currentStandings = computeStandings();
+            
+            // Group players into brackets based on Match Points
+            const brackets = {};
+            currentStandings.forEach(player => {
+                if (!brackets[player.points]) brackets[player.points] = [];
+                brackets[player.points].push(player);
+            });
+
+            // Sort points descending and shuffle each bracket internally
+            const sortedPointLevels = Object.keys(brackets).sort((a, b) => b - a);
+            sortedPointLevels.forEach(pts => {
+                const shuffledBracket = brackets[pts].sort(() => 0.5 - Math.random());
+                pool.push(...shuffledBracket);
+            });
         }
 
         const workingPool = [...pool];
@@ -205,7 +217,6 @@ document.addEventListener("DOMContentLoaded", () => {
         alert("Results saved.");
     };
 
-    // 5. Navigation/Tabs
     document.querySelectorAll(".tab").forEach(tab => {
         tab.onclick = () => {
             document.querySelectorAll(".tab, .tab-content").forEach(el => el.classList.remove("active"));
