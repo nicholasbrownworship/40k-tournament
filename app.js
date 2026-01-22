@@ -1,4 +1,4 @@
-/* app.js - Tactical Engine with VP Tiebreakers */
+/* app.js - Tactical Engine v2.2 (Stability Fix) */
 
 let state = {
     players: [],
@@ -9,12 +9,6 @@ let state = {
 
 // --- CORE LOGIC ---
 
-/**
- * Calculations:
- * 1. Points (W/L/D)
- * 2. Total VP (Tiebreaker 1)
- * 3. Win Count (Tiebreaker 2)
- */
 function computeStandings() {
     const stats = state.players.map(p => ({
         ...p, points: 0, vp: 0, w: 0, d: 0, l: 0
@@ -26,20 +20,17 @@ function computeStandings() {
             const pB = stats.find(p => p.id === m.bId);
             if (!pA || !m.result || m.result.outcome === "NONE") return;
 
-            // Track VP
             pA.vp += (parseInt(m.result.aVP) || 0);
             if (pB) pB.vp += (parseInt(m.result.bVP) || 0);
 
-            // Track Record
             const res = m.result.outcome;
             if (res === "A") { pA.points += 3; pA.w++; if(pB) pB.l++; }
             else if (res === "B") { if(pB) { pB.points += 3; pB.w++; } pA.l++; }
             else if (res === "D") { pA.points += 1; pA.d++; if(pB) { pB.points += 1; pB.d++; } }
-            else if (res === "BYE") { pA.points += 3; pA.w++; pA.vp += 0; } // Adjust if BYE gives flat VP
+            else if (res === "BYE") { pA.points += 3; pA.w++; }
         });
     });
 
-    // Sort: Points DESC, then VP DESC, then Wins DESC
     return stats.sort((a, b) => (b.points - a.points) || (b.vp - a.vp) || (b.w - a.w));
 }
 
@@ -65,23 +56,29 @@ function renderPlayers() {
     `).join('');
 }
 
+function renderRoundList() {
+    const sel = document.getElementById("roundSelect");
+    if (!sel) return;
+    sel.innerHTML = state.rounds.map(r => 
+        `<option value="${r.id}" ${r.id === state.activeRoundId ? 'selected' : ''}>${r.label}</option>`
+    ).join('');
+}
+
 function renderPairings() {
     const container = document.getElementById("pairingsContainer");
+    if (!container) return;
+    
     const activeRound = state.rounds.find(r => r.id === state.activeRoundId);
-    if (!activeRound) return;
+    if (!activeRound) {
+        container.innerHTML = `<div class="notice">Create a round to begin pairings.</div>`;
+        return;
+    }
 
     container.innerHTML = `
         <div class="card">
-            <h3>${activeRound.label} - Combat Missions</h3>
+            <h3>${activeRound.label} - Match Results</h3>
             <table>
-                <thead>
-                    <tr>
-                        <th>Table</th>
-                        <th>Player A (VP)</th>
-                        <th>Player B (VP)</th>
-                        <th>Outcome</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Table</th><th>A (VP)</th><th>B (VP)</th><th>Result</th></tr></thead>
                 <tbody>
                     ${activeRound.pairings.map(m => {
                         const pA = state.players.find(p => p.id === m.aId);
@@ -90,19 +87,13 @@ function renderPairings() {
                         return `
                         <tr class="pairing-row" data-match-id="${m.id}">
                             <td>${m.table}</td>
-                            <td>
-                                <div><strong>${pA?.name}</strong></div>
-                                <input type="number" class="vp-input" data-player="a" value="${res.aVP}" placeholder="VP">
-                            </td>
-                            <td>
-                                <div><strong>${pB ? pB.name : 'BYE'}</strong></div>
-                                ${pB ? `<input type="number" class="vp-input" data-player="b" value="${res.bVP}" placeholder="VP">` : ''}
-                            </td>
+                            <td><strong>${pA?.name}</strong><br><input type="number" class="vp-input" data-player="a" value="${res.aVP}"></td>
+                            <td><strong>${pB ? pB.name : 'BYE'}</strong><br>${pB ? `<input type="number" class="vp-input" data-player="b" value="${res.bVP}">` : ''}</td>
                             <td>
                                 <select class="outcome-select" ${!pB ? 'disabled' : ''}>
                                     <option value="NONE" ${res.outcome === 'NONE' ? 'selected' : ''}>Pending</option>
-                                    <option value="A" ${res.outcome === 'A' ? 'selected' : ''}>A Victory</option>
-                                    <option value="B" ${res.outcome === 'B' ? 'selected' : ''}>B Victory</option>
+                                    <option value="A" ${res.outcome === 'A' ? 'selected' : ''}>A Win</option>
+                                    <option value="B" ${res.outcome === 'B' ? 'selected' : ''}>B Win</option>
                                     <option value="D" ${res.outcome === 'D' ? 'selected' : ''}>Draw</option>
                                 </select>
                             </td>
@@ -121,7 +112,7 @@ function renderStandings() {
     tbody.innerHTML = ranked.map((p, i) => `
         <tr>
             <td>${i + 1}</td>
-            <td><strong>${p.name}</strong></td>
+            <td>${p.name}</td>
             <td>${p.faction}</td>
             <td>${p.points}</td>
             <td>${p.w}-${p.d}-${p.l}</td>
@@ -130,50 +121,42 @@ function renderStandings() {
     `).join('');
 }
 
-// --- PAIRING ENGINE ---
-
-function generatePairings() {
-    const round = state.rounds.find(r => r.id === state.activeRoundId);
-    if (!round || state.players.length < 2) return;
-
-    let sortedPool;
-    if (state.rounds.length === 1) {
-        sortedPool = [...state.players].sort(() => 0.5 - Math.random());
-    } else {
-        // Power Pairing: Rank by Points + VP
-        sortedPool = computeStandings();
-    }
-
-    const pool = [...sortedPool];
-    round.pairings = [];
-    let table = 1;
-
-    while (pool.length > 0) {
-        const a = pool.shift();
-        const b = pool.shift() || null;
-        round.pairings.push({
-            id: crypto.randomUUID(),
-            table: table++,
-            aId: a.id,
-            bId: b ? b.id : null,
-            result: { outcome: b ? "NONE" : "BYE", aVP: 0, bVP: 0 }
-        });
-    }
-    renderAll();
-}
-
 // --- EVENT LISTENERS ---
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Shared Initialization Logic
+    
+    // 1. Recommend Logic
+    document.getElementById("btnRecommend").onclick = () => {
+        const pCount = document.getElementById("lPlayers").value || 8;
+        const rounds = Math.ceil(Math.log2(pCount));
+        const box = document.getElementById("recommendBox");
+        const text = document.getElementById("recommendText");
+        if (box && text) {
+            text.innerHTML = `<strong>Recommendation:</strong> Swiss pairing based on Points + VP.<br>Rounds: ${rounds}`;
+            box.hidden = false;
+        }
+    };
+
+    // 2. Build Logic
     document.getElementById("btnBuildRecommended").onclick = () => {
-        state.meta.name = document.getElementById("lEventName").value || "40K GT";
+        state.meta.name = document.getElementById("lEventName").value || "40K Tournament";
         document.getElementById("viewLanding").hidden = true;
         document.getElementById("viewApp").hidden = false;
         document.getElementById("eventTitle").innerText = state.meta.name;
         renderAll();
     };
 
+    // 3. Player Logic
+    document.getElementById("btnAddPlayer").onclick = () => {
+        const nInput = document.getElementById("newPlayerName");
+        const fInput = document.getElementById("newPlayerFaction");
+        if (!nInput.value.trim()) return;
+        state.players.push({ id: crypto.randomUUID(), name: nInput.value.trim(), faction: fInput.value.trim() });
+        nInput.value = ""; fInput.value = "";
+        renderAll();
+    };
+
+    // 4. Round Logic
     document.getElementById("btnNextRound").onclick = () => {
         const round = { id: crypto.randomUUID(), label: `Round ${state.rounds.length + 1}`, pairings: [] };
         state.rounds.push(round);
@@ -181,34 +164,57 @@ document.addEventListener("DOMContentLoaded", () => {
         renderAll();
     };
 
-    document.getElementById("btnGeneratePairings").onclick = generatePairings;
+    document.getElementById("btnGeneratePairings").onclick = () => {
+        const round = state.rounds.find(r => r.id === state.activeRoundId);
+        if (!round || state.players.length < 2) return;
+
+        let pool;
+        if (state.rounds.length === 1) {
+            pool = [...state.players].sort(() => 0.5 - Math.random());
+        } else {
+            pool = computeStandings();
+        }
+
+        const workingPool = [...pool];
+        round.pairings = [];
+        let table = 1;
+        while (workingPool.length > 0) {
+            const a = workingPool.shift();
+            const b = workingPool.shift() || null;
+            round.pairings.push({
+                id: crypto.randomUUID(), table: table++, aId: a.id, bId: b ? b.id : null,
+                result: { outcome: b ? "NONE" : "BYE", aVP: 0, bVP: 0 }
+            });
+        }
+        renderAll();
+    };
 
     document.getElementById("btnSaveResults").onclick = () => {
         const round = state.rounds.find(r => r.id === state.activeRoundId);
+        if (!round) return;
         document.querySelectorAll(".pairing-row").forEach(row => {
-            const mId = row.dataset.matchId;
-            const outcome = row.querySelector(".outcome-select").value;
-            const aVP = row.querySelector('.vp-input[data-player="a"]')?.value || 0;
-            const bVP = row.querySelector('.vp-input[data-player="b"]')?.value || 0;
-            
-            const match = round.pairings.find(m => m.id === mId);
+            const match = round.pairings.find(m => m.id === row.dataset.matchId);
             if (match) {
-                match.result = { outcome, aVP: parseInt(aVP), bVP: parseInt(bVP) };
+                match.result.outcome = row.querySelector(".outcome-select").value;
+                match.result.aVP = parseInt(row.querySelector('[data-player="a"]').value) || 0;
+                const bInput = row.querySelector('[data-player="b"]');
+                match.result.bVP = bInput ? (parseInt(bInput.value) || 0) : 0;
             }
         });
         renderAll();
-        alert("Mission Results Logged.");
+        alert("Results saved.");
     };
 
-    // Tab & Reset Handlers (Keep from previous)
-    document.getElementById("btnReset").onclick = () => { if(confirm("Wipe Data?")) location.reload(); };
+    // 5. Navigation/Tabs
     document.querySelectorAll(".tab").forEach(tab => {
-        tab.addEventListener("click", () => {
+        tab.onclick = () => {
             document.querySelectorAll(".tab, .tab-content").forEach(el => el.classList.remove("active"));
             tab.classList.add("active");
             document.getElementById(`tab-${tab.dataset.tab}`).classList.add("active");
-        });
+        };
     });
+
+    document.getElementById("btnReset").onclick = () => { if(confirm("Wipe all?")) location.reload(); };
 });
 
 window.removePlayer = (id) => { state.players = state.players.filter(p => p.id !== id); renderAll(); };
