@@ -10,16 +10,41 @@
         .status-playing { background-color: #ffc107; color: #212529; padding: 8px; border-radius: 6px; text-align: center; font-weight: bold; font-size: 0.7rem; }
         .status-finished { background-color: #28a745; color: white; padding: 8px; border-radius: 6px; text-align: center; font-weight: bold; font-size: 0.7rem; }
         .pending-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #ddd; }
+        
+        /* Notification Banners */
         #announcementBanner { 
             position: fixed; top: 0; left: 0; width: 100%; padding: 15px; 
             background: #dc3545; color: white; text-align: center; 
-            font-weight: bold; z-index: 9999; display: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            font-weight: bold; z-index: 10000; display: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
+
+        /* NEW PAIRINGS MODAL */
+        #pairingsModal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); color: white; z-index: 10001;
+            display: none; align-items: center; justify-content: center; text-align: center;
+            padding: 20px;
+        }
+        .modal-content { background: #222; padding: 30px; border-radius: 15px; border: 2px solid var(--accent); max-width: 400px; width: 100%; }
+        .modal-table { font-size: 4rem; font-weight: bold; color: var(--accent); margin: 10px 0; }
+        
         .round-block { border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 20px; }
-        .round-block:last-child { border-bottom: none; }
     </style>
 </head>
 <body>
+
+    <div id="pairingsModal">
+        <div class="modal-content">
+            <h2 id="modalRoundName">Round Starting!</h2>
+            <p>You have been assigned to:</p>
+            <div class="modal-table" id="modalTableNum">--</div>
+            <p id="modalOpponent">Vs. Opponent</p>
+            <hr style="opacity: 0.2; margin: 20px 0;">
+            <p style="font-size: 0.9rem; opacity: 0.8;">Time Remaining:</p>
+            <div id="modalTimer" style="font-size: 1.5rem; font-family: monospace; font-weight: bold;">00:00</div>
+            <button class="btn btn-primary" style="margin-top: 25px; width: 100%;" onclick="closeModal()">Go to Match</button>
+        </div>
+    </div>
 
     <div id="announcementBanner"><span id="announcementText"></span></div>
     <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
@@ -27,7 +52,6 @@
     <div id="viewLogin" class="ops-wrapper">
         <div class="card" style="text-align:center; margin-top: 50px;">
             <h1>Tactical Console</h1>
-            <p>Sign in to manage your matches and follow the event.</p>
             <button id="btnLogin" class="btn btn-primary">Sign in with Google</button>
         </div>
     </div>
@@ -71,42 +95,17 @@
             <div class="card"><table id="playersTable"><thead><tr><th>#</th><th>Player</th><th>Faction</th><th>Action</th></tr></thead><tbody></tbody></table></div>
         </section>
 
-        <section id="tab-pairings" class="tab-content">
-            <div id="pairingsContainer"></div>
-        </section>
+        <section id="tab-pairings" class="tab-content"><div id="pairingsContainer"></div></section>
 
         <section id="tab-standings" class="tab-content">
             <div class="card"><table id="standingsTable"><thead><tr><th>Rank</th><th>Name</th><th>Faction</th><th>Pts</th><th>W-D-L</th><th>VP</th></tr></thead><tbody></tbody></table></div>
         </section>
 
         <section id="tab-admin" class="tab-content">
-            <div class="card">
-                <h3>Round History & Corrections</h3>
-                <p style="font-size: 0.8rem; opacity: 0.7;">Scroll back to any round to edit scores.</p>
-                <div id="historyContainer"></div>
-            </div>
-
-            <div class="card">
-                <h3>Pending Approvals</h3>
-                <div id="pendingList"></div>
-            </div>
-
-            <div class="card">
-                <h3>Control Panel</h3>
-                <div style="display:flex; gap:10px;">
-                    <button id="btnNextRound" class="btn">Add Round Slot</button>
-                    <button id="btnGeneratePairings" class="btn btn-primary">Pair & Start Clock</button>
-                </div>
-            </div>
-            
-            <div class="card">
-                <h3>Manual Add</h3>
-                <div class="form-grid">
-                    <input type="text" id="newPlayerName" placeholder="Name">
-                    <input type="text" id="newPlayerFaction" placeholder="Faction">
-                    <button id="btnAddPlayer" class="btn">Add</button>
-                </div>
-            </div>
+            <div class="card"><h3>Round History & Corrections</h3><div id="historyContainer"></div></div>
+            <div class="card"><h3>Pending Approvals</h3><div id="pendingList"></div></div>
+            <div class="card"><h3>Control Panel</h3><div style="display:flex; gap:10px;"><button id="btnNextRound" class="btn">Add Round Slot</button><button id="btnGeneratePairings" class="btn btn-primary">Pair & Start Clock</button></div></div>
+            <div class="card"><h3>Manual Add</h3><div class="form-grid"><input type="text" id="newPlayerName" placeholder="Name"><input type="text" id="newPlayerFaction" placeholder="Faction"><button id="btnAddPlayer" class="btn">Add</button></div></div>
         </section>
     </div>
 
