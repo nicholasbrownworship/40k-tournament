@@ -1,4 +1,12 @@
-/* style.css - Tactical UI v3.2 */
+/* style.css - Tactical Console Master v4.0 */
+
+/* 1. Force Reset - Prevents "White Page" defaults */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
 :root {
     --bg: #0d1117;
     --card: #161b22;
@@ -7,113 +15,123 @@
     --accent: #58a6ff;
     --success: #238636;
     --danger: #da3633;
+    --tab-inactive: #8b949e;
 }
 
-body {
-    background: var(--bg);
+html, body {
+    background-color: var(--bg) !important;
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    margin: 0;
+    min-height: 100vh;
 }
 
-/* Ensure hidden elements stay hidden */
+/* 2. Layout Containers */
+.ops-wrapper { 
+    max-width: 1000px; 
+    margin: 0 auto; 
+    padding: 20px; 
+}
+
 [hidden] { display: none !important; }
 
-.ops-wrapper { max-width: 1000px; margin: 0 auto; padding: 20px; }
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
 
 .ops-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid var(--border);
-    padding-bottom: 10px;
-    margin-bottom: 20px;
+    padding-bottom: 15px;
+    margin-bottom: 25px;
 }
 
-.card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 20px;
-    margin-bottom: 20px;
-}
-
-/* Tab Logic */
-.tab-content { display: none; }
-.tab-content.active { display: block; }
-
+/* 3. Tabs & Navigation */
 .tabs {
     display: flex;
-    gap: 10px;
-    margin-top: 15px;
+    gap: 15px;
+    margin-bottom: 20px;
     border-bottom: 1px solid var(--border);
 }
 
 .tab {
     background: none;
     border: none;
-    color: #8b949e;
-    padding: 10px 20px;
+    color: var(--tab-inactive);
+    padding: 12px 20px;
     cursor: pointer;
     font-weight: 600;
+    font-size: 14px;
+    transition: 0.2s;
 }
 
 .tab.active {
     color: var(--accent);
-    border-bottom: 2px solid var(--accent);
+    border-bottom: 3px solid var(--accent);
 }
 
-/* Scoring Grid - This makes the 4 boxes look professional */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* 4. Tables & Data Display */
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; color: var(--tab-inactive); font-size: 11px; text-transform: uppercase; padding: 12px; border-bottom: 2px solid var(--border); }
+td { padding: 14px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+
+/* 5. Inputs & Buttons */
 .form-grid {
     display: flex;
-    gap: 8px;
-    margin-top: 5px;
+    gap: 10px;
+    margin: 10px 0;
     flex-wrap: wrap;
 }
 
-.score-input {
-    width: 60px;
+input, select {
     background: #0d1117;
     border: 1px solid var(--border);
     color: white;
-    padding: 8px;
+    padding: 10px;
     border-radius: 6px;
+    outline: none;
+}
+
+input:focus { border-color: var(--accent); }
+
+.score-input {
+    width: 65px;
     text-align: center;
     font-weight: bold;
 }
 
-/* Table Styling */
-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-th { text-align: left; color: #8b949e; font-size: 12px; text-transform: uppercase; padding: 10px; border-bottom: 2px solid var(--border); }
-td { padding: 12px 10px; border-bottom: 1px solid var(--border); }
-
-/* Buttons */
 .btn {
-    padding: 8px 16px;
+    padding: 10px 18px;
     border-radius: 6px;
     border: 1px solid var(--border);
     background: #21262d;
     color: var(--text);
     cursor: pointer;
     font-weight: 600;
-    transition: background 0.2s;
 }
 
-.btn-primary { background: var(--accent); color: white; border: none; }
-.btn-success { background: var(--success); color: white; border: none; }
-.btn-danger { color: #f85149; }
+.btn-primary { background: var(--success); border: none; color: white; }
+.btn-danger { color: #f85149; border-color: rgba(248,81,73,0.3); }
 
-.btn:hover { filter: brightness(1.2); }
-
-/* Timer Deck */
+/* 6. Timer Deck */
 .timer-deck {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #090c10;
-    padding: 15px 25px;
     border: 1px solid var(--accent);
-    box-shadow: 0 0 10px rgba(88, 166, 255, 0.1);
 }
 
-#timerClock { font-size: 24px; color: var(--accent); font-weight: bold; font-family: monospace; }
+#timerClock { 
+    font-size: 28px; 
+    color: var(--accent); 
+    font-family: 'Courier New', Courier, monospace;
+}
