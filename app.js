@@ -1,4 +1,4 @@
-/* app.js - Tactical Engine v2.3 (Point-Bracket Randomization) */
+/* app.js - Tactical Tournament Console v3.0 */
 
 let state = {
     players: [],
@@ -7,11 +7,13 @@ let state = {
     meta: { name: "", useVP: true }
 };
 
-// --- CORE LOGIC ---
+let timerInterval = null;
+
+// --- CORE LOGIC: STANDINGS & TIE-BREAKERS ---
 
 function computeStandings() {
     const stats = state.players.map(p => ({
-        ...p, points: 0, vp: 0, w: 0, d: 0, l: 0
+        ...p, points: 0, vp: 0, primary: 0, secondary: 0, paint: 0, extra: 0, w: 0, d: 0, l: 0
     }));
 
     state.rounds.forEach(r => {
@@ -20,9 +22,24 @@ function computeStandings() {
             const pB = stats.find(p => p.id === m.bId);
             if (!pA || !m.result || m.result.outcome === "NONE") return;
 
-            pA.vp += (parseInt(m.result.aVP) || 0);
-            if (pB) pB.vp += (parseInt(m.result.bVP) || 0);
+            // Scoring helper to aggregate the 4 boxes
+            const processScore = (player, scoreObj) => {
+                const pri = parseInt(scoreObj.primary) || 0;
+                const sec = parseInt(scoreObj.secondary) || 0;
+                const pnt = parseInt(scoreObj.paint) || 0;
+                const ext = parseInt(scoreObj.extra) || 0;
+                
+                player.primary += pri;
+                player.secondary += sec;
+                player.paint += pnt;
+                player.extra += ext;
+                player.vp += (pri + sec + pnt + ext);
+            };
 
+            processScore(pA, m.result.a);
+            if (pB) processScore(pB, m.result.b);
+
+            // Record Calculation
             const res = m.result.outcome;
             if (res === "A") { pA.points += 3; pA.w++; if(pB) pB.l++; }
             else if (res === "B") { if(pB) { pB.points += 3; pB.w++; } pA.l++; }
@@ -31,10 +48,32 @@ function computeStandings() {
         });
     });
 
-    return stats.sort((a, b) => (b.points - a.points) || (b.vp - a.vp) || (b.w - a.w));
+    // Rank by: 1. Match Points, 2. Total VP, 3. Total Primary
+    return stats.sort((a, b) => (b.points - a.points) || (b.vp - a.vp) || (b.primary - a.primary));
 }
 
-// --- RENDERING ---
+// --- TIMER SYSTEM ---
+
+function startTimer(minutes) {
+    clearInterval(timerInterval);
+    let seconds = Math.floor(minutes * 60);
+    const display = document.getElementById("timerClock");
+
+    timerInterval = setInterval(() => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        display.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        
+        if (seconds <= 0) {
+            clearInterval(timerInterval);
+            display.style.color = "#da3633"; // Danger Red
+            alert("ROUND TIME EXPIRED");
+        }
+        seconds--;
+    }, 1000);
+}
+
+// --- RENDERERS ---
 
 function renderAll() {
     renderPlayers();
@@ -66,35 +105,48 @@ function renderRoundList() {
 
 function renderPairings() {
     const container = document.getElementById("pairingsContainer");
-    if (!container) return;
-    
     const activeRound = state.rounds.find(r => r.id === state.activeRoundId);
-    if (!activeRound) {
-        container.innerHTML = `<div class="notice">Create a round to begin pairings.</div>`;
-        return;
-    }
+    if (!container || !activeRound) return;
 
     container.innerHTML = `
         <div class="card">
-            <h3>${activeRound.label} - Match Results</h3>
+            <h3>${activeRound.label} Pairings</h3>
             <table>
-                <thead><tr><th>Table</th><th>A (VP)</th><th>B (VP)</th><th>Result</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Table</th>
+                        <th>Player / Scoring (Pri | Sec | Pnt | Ext)</th>
+                        <th>Outcome</th>
+                    </tr>
+                </thead>
                 <tbody>
                     ${activeRound.pairings.map(m => {
                         const pA = state.players.find(p => p.id === m.aId);
                         const pB = state.players.find(p => p.id === m.bId);
-                        const res = m.result || { outcome: "NONE", aVP: 0, bVP: 0 };
+                        const r = m.result || { outcome: "NONE", a: {}, b: {} };
+                        
+                        const inputs = (side) => `
+                            <div class="form-grid" style="margin-top:5px; gap:5px;">
+                                <input type="number" class="score-input" data-side="${side}" data-type="primary" value="${r[side]?.primary || 0}" placeholder="Pri">
+                                <input type="number" class="score-input" data-side="${side}" data-type="secondary" value="${r[side]?.secondary || 0}" placeholder="Sec">
+                                <input type="number" class="score-input" data-side="${side}" data-type="paint" value="${r[side]?.paint || 0}" placeholder="Pnt">
+                                <input type="number" class="score-input" data-side="${side}" data-type="extra" value="${r[side]?.extra || 0}" placeholder="Ext">
+                            </div>
+                        `;
+
                         return `
                         <tr class="pairing-row" data-match-id="${m.id}">
-                            <td>${m.table}</td>
-                            <td><strong>${pA?.name}</strong><br><input type="number" class="vp-input" data-player="a" value="${res.aVP}"></td>
-                            <td><strong>${pB ? pB.name : 'BYE'}</strong><br>${pB ? `<input type="number" class="vp-input" data-player="b" value="${res.bVP}">` : ''}</td>
+                            <td style="vertical-align:top;"><strong>${m.table}</strong></td>
                             <td>
+                                <div><strong>${pA?.name}</strong> ${inputs('a')}</div>
+                                <div style="margin-top:15px;"><strong>${pB ? pB.name : 'BYE'}</strong> ${pB ? inputs('b') : ''}</div>
+                            </td>
+                            <td style="vertical-align:top;">
                                 <select class="outcome-select" ${!pB ? 'disabled' : ''}>
-                                    <option value="NONE" ${res.outcome === 'NONE' ? 'selected' : ''}>Pending</option>
-                                    <option value="A" ${res.outcome === 'A' ? 'selected' : ''}>A Win</option>
-                                    <option value="B" ${res.outcome === 'B' ? 'selected' : ''}>B Win</option>
-                                    <option value="D" ${res.outcome === 'D' ? 'selected' : ''}>Draw</option>
+                                    <option value="NONE" ${r.outcome === 'NONE' ? 'selected' : ''}>Pending</option>
+                                    <option value="A" ${r.outcome === 'A' ? 'selected' : ''}>A Win</option>
+                                    <option value="B" ${r.outcome === 'B' ? 'selected' : ''}>B Win</option>
+                                    <option value="D" ${r.outcome === 'D' ? 'selected' : ''}>Draw</option>
                                 </select>
                             </td>
                         </tr>`;
@@ -112,11 +164,11 @@ function renderStandings() {
     tbody.innerHTML = ranked.map((p, i) => `
         <tr>
             <td>${i + 1}</td>
-            <td>${p.name}</td>
+            <td><strong>${p.name}</strong></td>
             <td>${p.faction}</td>
             <td>${p.points}</td>
             <td>${p.w}-${p.d}-${p.l}</td>
-            <td><strong>${p.vp}</strong></td>
+            <td><strong>${p.vp}</strong> <small>(P:${p.primary})</small></td>
         </tr>
     `).join('');
 }
@@ -125,25 +177,29 @@ function renderStandings() {
 
 document.addEventListener("DOMContentLoaded", () => {
     
+    // Setup & Initialization
     document.getElementById("btnRecommend").onclick = () => {
         const pCount = document.getElementById("lPlayers").value || 8;
         const rounds = Math.ceil(Math.log2(pCount));
-        const box = document.getElementById("recommendBox");
-        const text = document.getElementById("recommendText");
-        if (box && text) {
-            text.innerHTML = `<strong>Recommendation:</strong> Swiss pairing based on Points + VP.<br>Rounds: ${rounds}`;
-            box.hidden = false;
-        }
+        document.getElementById("recommendText").innerHTML = `Mission Profile: Swiss<br>Suggested Rounds: ${rounds}`;
+        document.getElementById("recommendBox").hidden = false;
     };
 
     document.getElementById("btnBuildRecommended").onclick = () => {
-        state.meta.name = document.getElementById("lEventName").value || "40K Tournament";
+        state.meta.name = document.getElementById("lEventName").value || "Grand Tournament";
         document.getElementById("viewLanding").hidden = true;
         document.getElementById("viewApp").hidden = false;
         document.getElementById("eventTitle").innerText = state.meta.name;
         renderAll();
     };
 
+    // Timer Controls
+    document.getElementById("btnSetTimer").onclick = () => {
+        const mins = parseFloat(document.getElementById("timerInput").value) || 150;
+        startTimer(mins);
+    };
+
+    // Player Management
     document.getElementById("btnAddPlayer").onclick = () => {
         const nInput = document.getElementById("newPlayerName");
         const fInput = document.getElementById("newPlayerFaction");
@@ -153,6 +209,7 @@ document.addEventListener("DOMContentLoaded", () => {
         renderAll();
     };
 
+    // Round Logic
     document.getElementById("btnNextRound").onclick = () => {
         const round = { id: crypto.randomUUID(), label: `Round ${state.rounds.length + 1}`, pairings: [] };
         state.rounds.push(round);
@@ -166,24 +223,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let pool = [];
         if (state.rounds.length === 1) {
-            // Round 1: Total Random
             pool = [...state.players].sort(() => 0.5 - Math.random());
         } else {
-            // Round 2+: Point-Bracket Randomization
+            // Point-Bracket Randomization
             const currentStandings = computeStandings();
-            
-            // Group players into brackets based on Match Points
             const brackets = {};
-            currentStandings.forEach(player => {
-                if (!brackets[player.points]) brackets[player.points] = [];
-                brackets[player.points].push(player);
+            currentStandings.forEach(p => {
+                if (!brackets[p.points]) brackets[p.points] = [];
+                brackets[p.points].push(p);
             });
-
-            // Sort points descending and shuffle each bracket internally
-            const sortedPointLevels = Object.keys(brackets).sort((a, b) => b - a);
-            sortedPointLevels.forEach(pts => {
-                const shuffledBracket = brackets[pts].sort(() => 0.5 - Math.random());
-                pool.push(...shuffledBracket);
+            const sortedKeys = Object.keys(brackets).sort((a, b) => b - a);
+            sortedKeys.forEach(k => {
+                pool.push(...brackets[k].sort(() => 0.5 - Math.random()));
             });
         }
 
@@ -195,28 +246,42 @@ document.addEventListener("DOMContentLoaded", () => {
             const b = workingPool.shift() || null;
             round.pairings.push({
                 id: crypto.randomUUID(), table: table++, aId: a.id, bId: b ? b.id : null,
-                result: { outcome: b ? "NONE" : "BYE", aVP: 0, bVP: 0 }
+                result: { outcome: b ? "NONE" : "BYE", a: {}, b: {} }
             });
         }
+        
+        // Auto-start timer on generate
+        const mins = parseFloat(document.getElementById("timerInput").value) || 150;
+        startTimer(mins);
         renderAll();
     };
 
     document.getElementById("btnSaveResults").onclick = () => {
         const round = state.rounds.find(r => r.id === state.activeRoundId);
         if (!round) return;
+        
         document.querySelectorAll(".pairing-row").forEach(row => {
             const match = round.pairings.find(m => m.id === row.dataset.matchId);
             if (match) {
-                match.result.outcome = row.querySelector(".outcome-select").value;
-                match.result.aVP = parseInt(row.querySelector('[data-player="a"]').value) || 0;
-                const bInput = row.querySelector('[data-player="b"]');
-                match.result.bVP = bInput ? (parseInt(bInput.value) || 0) : 0;
+                const collect = (side) => ({
+                    primary: row.querySelector(`[data-side="${side}"][data-type="primary"]`)?.value || 0,
+                    secondary: row.querySelector(`[data-side="${side}"][data-type="secondary"]`)?.value || 0,
+                    paint: row.querySelector(`[data-side="${side}"][data-type="paint"]`)?.value || 0,
+                    extra: row.querySelector(`[data-side="${side}"][data-type="extra"]`)?.value || 0
+                });
+
+                match.result = {
+                    outcome: row.querySelector(".outcome-select").value,
+                    a: collect('a'),
+                    b: collect('b')
+                };
             }
         });
         renderAll();
-        alert("Results saved.");
+        alert("Scores Saved.");
     };
 
+    // Navigation & Global
     document.querySelectorAll(".tab").forEach(tab => {
         tab.onclick = () => {
             document.querySelectorAll(".tab, .tab-content").forEach(el => el.classList.remove("active"));
@@ -225,7 +290,7 @@ document.addEventListener("DOMContentLoaded", () => {
         };
     });
 
-    document.getElementById("btnReset").onclick = () => { if(confirm("Wipe all?")) location.reload(); };
+    document.getElementById("btnReset").onclick = () => { if(confirm("Wipe all data?")) location.reload(); };
 });
 
 window.removePlayer = (id) => { state.players = state.players.filter(p => p.id !== id); renderAll(); };
