@@ -1,15 +1,78 @@
-/* app.js - Tactical Tournament Console v3.0 */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, set, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-let state = {
-    players: [],
-    rounds: [],
-    activeRoundId: null,
-    meta: { name: "", useVP: true }
-};
+// 1. YOUR FIREBASE CONFIG (Paste from Firebase Console)
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
 
-let timerInterval = null;
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyDEAIgfetTsb4TQbWeEIQkKgcWXTlbOuQE",
+    authDomain: "k-tournament-console.firebaseapp.com",
+    projectId: "k-tournament-console",
+    storageBucket: "k-tournament-console.firebasestorage.app",
+    messagingSenderId: "30278148010",
+    appId: "1:30278148010:web:9226955ddd75633c87d5d3",
+    measurementId: "G-ER0NM659HX"
+  };
 
-// --- CORE LOGIC: STANDINGS & TIE-BREAKERS ---
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
+
+
+
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+let currentUser = null;
+let isAdmin = false; // Set your email here or handle via DB
+const ADMIN_EMAIL = "your-email@gmail.com"; 
+
+// --- CORE APP STATE ---
+let state = { players: [], rounds: [], activeRoundId: null };
+
+// --- DATABASE SYNC ---
+onValue(ref(db, 'tournament/'), (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+        state.players = data.players ? Object.values(data.players) : [];
+        state.rounds = data.rounds ? Object.values(data.rounds) : [];
+        state.activeRoundId = data.activeRoundId || null;
+        renderAll();
+    }
+});
+
+// --- AUTH LOGIC ---
+document.getElementById("btnLogin").onclick = () => signInWithPopup(auth, provider);
+
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        currentUser = user;
+        isAdmin = user.email === ADMIN_EMAIL;
+        document.getElementById("viewLogin").hidden = true;
+        document.getElementById("viewApp").hidden = false;
+        document.getElementById("userBadge").innerText = `Signed in as: ${user.displayName}`;
+        
+        if (isAdmin) {
+            document.querySelectorAll(".admin-only").forEach(el => el.hidden = false);
+        }
+        renderAll();
+    }
+});
+
+// --- TOURNAMENT FUNCTIONS ---
 
 function computeStandings() {
     const stats = state.players.map(p => ({
@@ -17,137 +80,88 @@ function computeStandings() {
     }));
 
     state.rounds.forEach(r => {
+        if (!r.pairings) return;
         r.pairings.forEach(m => {
             const pA = stats.find(p => p.id === m.aId);
             const pB = stats.find(p => p.id === m.bId);
             if (!pA || !m.result || m.result.outcome === "NONE") return;
 
-            // Scoring helper to aggregate the 4 boxes
             const processScore = (player, scoreObj) => {
-                const pri = parseInt(scoreObj.primary) || 0;
-                const sec = parseInt(scoreObj.secondary) || 0;
-                const pnt = parseInt(scoreObj.paint) || 0;
-                const ext = parseInt(scoreObj.extra) || 0;
-                
-                player.primary += pri;
-                player.secondary += sec;
-                player.paint += pnt;
-                player.extra += ext;
-                player.vp += (pri + sec + pnt + ext);
+                player.primary += parseInt(scoreObj.primary) || 0;
+                player.secondary += parseInt(scoreObj.secondary) || 0;
+                player.paint += parseInt(scoreObj.paint) || 0;
+                player.extra += parseInt(scoreObj.extra) || 0;
+                player.vp += (parseInt(scoreObj.primary) || 0) + (parseInt(scoreObj.secondary) || 0) + (parseInt(scoreObj.paint) || 0) + (parseInt(scoreObj.extra) || 0);
             };
 
             processScore(pA, m.result.a);
             if (pB) processScore(pB, m.result.b);
 
-            // Record Calculation
-            const res = m.result.outcome;
-            if (res === "A") { pA.points += 3; pA.w++; if(pB) pB.l++; }
-            else if (res === "B") { if(pB) { pB.points += 3; pB.w++; } pA.l++; }
-            else if (res === "D") { pA.points += 1; pA.d++; if(pB) { pB.points += 1; pB.d++; } }
-            else if (res === "BYE") { pA.points += 3; pA.w++; }
+            if (m.result.outcome === "A") { pA.points += 3; pA.w++; if(pB) pB.l++; }
+            else if (m.result.outcome === "B") { if(pB) { pB.points += 3; pB.w++; } pA.l++; }
+            else if (m.result.outcome === "D") { pA.points += 1; pA.d++; if(pB) { pB.points += 1; pB.d++; } }
+            else if (m.result.outcome === "BYE") { pA.points += 3; pA.w++; }
         });
     });
 
-    // Rank by: 1. Match Points, 2. Total VP, 3. Total Primary
     return stats.sort((a, b) => (b.points - a.points) || (b.vp - a.vp) || (b.primary - a.primary));
 }
 
-// --- TIMER SYSTEM ---
-
-function startTimer(minutes) {
-    clearInterval(timerInterval);
-    let seconds = Math.floor(minutes * 60);
-    const display = document.getElementById("timerClock");
-
-    timerInterval = setInterval(() => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        display.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-        
-        if (seconds <= 0) {
-            clearInterval(timerInterval);
-            display.style.color = "#da3633"; // Danger Red
-            alert("ROUND TIME EXPIRED");
-        }
-        seconds--;
-    }, 1000);
-}
-
-// --- RENDERERS ---
+// --- RENDERING (With Personalization) ---
 
 function renderAll() {
     renderPlayers();
-    renderRoundList();
-    renderPairings();
     renderStandings();
-}
-
-function renderPlayers() {
-    const tbody = document.querySelector("#playersTable tbody");
-    if (!tbody) return;
-    tbody.innerHTML = state.players.map((p, i) => `
-        <tr>
-            <td>${i + 1}</td>
-            <td><strong>${p.name}</strong></td>
-            <td>${p.faction}</td>
-            <td><button class="btn btn-danger" onclick="window.removePlayer('${p.id}')">Remove</button></td>
-        </tr>
-    `).join('');
-}
-
-function renderRoundList() {
-    const sel = document.getElementById("roundSelect");
-    if (!sel) return;
-    sel.innerHTML = state.rounds.map(r => 
-        `<option value="${r.id}" ${r.id === state.activeRoundId ? 'selected' : ''}>${r.label}</option>`
-    ).join('');
+    renderPairings();
 }
 
 function renderPairings() {
     const container = document.getElementById("pairingsContainer");
     const activeRound = state.rounds.find(r => r.id === state.activeRoundId);
-    if (!container || !activeRound) return;
+    if (!activeRound) return;
+
+    // Filter pairings: Admin sees all, Player sees only theirs
+    const pairingsToShow = isAdmin 
+        ? activeRound.pairings 
+        : activeRound.pairings.filter(m => {
+            const pA = state.players.find(p => p.id === m.aId);
+            const pB = state.players.find(p => p.id === m.bId);
+            return pA?.name === currentUser.displayName || pB?.name === currentUser.displayName;
+        });
 
     container.innerHTML = `
         <div class="card">
-            <h3>${activeRound.label} Pairings</h3>
+            <h3>${activeRound.label} - ${isAdmin ? "All Tables" : "My Matchup"}</h3>
+            ${pairingsToShow.length === 0 ? "<p>You are not paired this round.</p>" : ""}
             <table>
-                <thead>
-                    <tr>
-                        <th>Table</th>
-                        <th>Player / Scoring (Pri | Sec | Pnt | Ext)</th>
-                        <th>Outcome</th>
-                    </tr>
-                </thead>
                 <tbody>
-                    ${activeRound.pairings.map(m => {
+                    ${pairingsToShow.map(m => {
                         const pA = state.players.find(p => p.id === m.aId);
                         const pB = state.players.find(p => p.id === m.bId);
                         const r = m.result || { outcome: "NONE", a: {}, b: {} };
                         
                         const inputs = (side) => `
-                            <div class="form-grid" style="margin-top:5px; gap:5px;">
-                                <input type="number" class="score-input" data-side="${side}" data-type="primary" value="${r[side]?.primary || 0}" placeholder="Pri">
-                                <input type="number" class="score-input" data-side="${side}" data-type="secondary" value="${r[side]?.secondary || 0}" placeholder="Sec">
-                                <input type="number" class="score-input" data-side="${side}" data-type="paint" value="${r[side]?.paint || 0}" placeholder="Pnt">
-                                <input type="number" class="score-input" data-side="${side}" data-type="extra" value="${r[side]?.extra || 0}" placeholder="Ext">
+                            <div class="form-grid">
+                                <input type="number" class="score-input" data-mid="${m.id}" data-side="${side}" data-type="primary" value="${r[side]?.primary || 0}" placeholder="Pri">
+                                <input type="number" class="score-input" data-mid="${m.id}" data-side="${side}" data-type="secondary" value="${r[side]?.secondary || 0}" placeholder="Sec">
+                                <input type="number" class="score-input" data-mid="${m.id}" data-side="${side}" data-type="paint" value="${r[side]?.paint || 0}" placeholder="Pnt">
+                                <input type="number" class="score-input" data-mid="${m.id}" data-side="${side}" data-type="extra" value="${r[side]?.extra || 0}" placeholder="Ext">
                             </div>
                         `;
 
                         return `
-                        <tr class="pairing-row" data-match-id="${m.id}">
-                            <td style="vertical-align:top;"><strong>${m.table}</strong></td>
+                        <tr class="pairing-row">
                             <td>
-                                <div><strong>${pA?.name}</strong> ${inputs('a')}</div>
-                                <div style="margin-top:15px;"><strong>${pB ? pB.name : 'BYE'}</strong> ${pB ? inputs('b') : ''}</div>
-                            </td>
-                            <td style="vertical-align:top;">
-                                <select class="outcome-select" ${!pB ? 'disabled' : ''}>
+                                <div><strong>Table ${m.table}: ${pA?.name} vs ${pB ? pB.name : 'BYE'}</strong></div>
+                                <div style="margin-top:10px;">${pA?.name}: ${inputs('a')}</div>
+                                <div style="margin-top:10px;">${pB ? `${pB.name}: ${inputs('b')}` : ''}</div>
+                                <select class="outcome-select" data-mid="${m.id}" style="margin-top:10px;">
                                     <option value="NONE" ${r.outcome === 'NONE' ? 'selected' : ''}>Pending</option>
                                     <option value="A" ${r.outcome === 'A' ? 'selected' : ''}>A Win</option>
                                     <option value="B" ${r.outcome === 'B' ? 'selected' : ''}>B Win</option>
                                     <option value="D" ${r.outcome === 'D' ? 'selected' : ''}>Draw</option>
                                 </select>
+                                <button class="btn btn-success btn-save-match" data-mid="${m.id}" style="margin-top:10px;">Submit Score</button>
                             </td>
                         </tr>`;
                     }).join('')}
@@ -155,142 +169,67 @@ function renderPairings() {
             </table>
         </div>
     `;
-}
 
-function renderStandings() {
-    const tbody = document.querySelector("#standingsTable tbody");
-    if (!tbody) return;
-    const ranked = computeStandings();
-    tbody.innerHTML = ranked.map((p, i) => `
-        <tr>
-            <td>${i + 1}</td>
-            <td><strong>${p.name}</strong></td>
-            <td>${p.faction}</td>
-            <td>${p.points}</td>
-            <td>${p.w}-${p.d}-${p.l}</td>
-            <td><strong>${p.vp}</strong> <small>(P:${p.primary})</small></td>
-        </tr>
-    `).join('');
-}
-
-// --- EVENT LISTENERS ---
-
-document.addEventListener("DOMContentLoaded", () => {
-    
-    // Setup & Initialization
-    document.getElementById("btnRecommend").onclick = () => {
-        const pCount = document.getElementById("lPlayers").value || 8;
-        const rounds = Math.ceil(Math.log2(pCount));
-        document.getElementById("recommendText").innerHTML = `Mission Profile: Swiss<br>Suggested Rounds: ${rounds}`;
-        document.getElementById("recommendBox").hidden = false;
-    };
-
-    document.getElementById("btnBuildRecommended").onclick = () => {
-        state.meta.name = document.getElementById("lEventName").value || "Grand Tournament";
-        document.getElementById("viewLanding").hidden = true;
-        document.getElementById("viewApp").hidden = false;
-        document.getElementById("eventTitle").innerText = state.meta.name;
-        renderAll();
-    };
-
-    // Timer Controls
-    document.getElementById("btnSetTimer").onclick = () => {
-        const mins = parseFloat(document.getElementById("timerInput").value) || 150;
-        startTimer(mins);
-    };
-
-    // Player Management
-    document.getElementById("btnAddPlayer").onclick = () => {
-        const nInput = document.getElementById("newPlayerName");
-        const fInput = document.getElementById("newPlayerFaction");
-        if (!nInput.value.trim()) return;
-        state.players.push({ id: crypto.randomUUID(), name: nInput.value.trim(), faction: fInput.value.trim() });
-        nInput.value = ""; fInput.value = "";
-        renderAll();
-    };
-
-    // Round Logic
-    document.getElementById("btnNextRound").onclick = () => {
-        const round = { id: crypto.randomUUID(), label: `Round ${state.rounds.length + 1}`, pairings: [] };
-        state.rounds.push(round);
-        state.activeRoundId = round.id;
-        renderAll();
-    };
-
-    document.getElementById("btnGeneratePairings").onclick = () => {
-        const round = state.rounds.find(r => r.id === state.activeRoundId);
-        if (!round || state.players.length < 2) return;
-
-        let pool = [];
-        if (state.rounds.length === 1) {
-            pool = [...state.players].sort(() => 0.5 - Math.random());
-        } else {
-            // Point-Bracket Randomization
-            const currentStandings = computeStandings();
-            const brackets = {};
-            currentStandings.forEach(p => {
-                if (!brackets[p.points]) brackets[p.points] = [];
-                brackets[p.points].push(p);
-            });
-            const sortedKeys = Object.keys(brackets).sort((a, b) => b - a);
-            sortedKeys.forEach(k => {
-                pool.push(...brackets[k].sort(() => 0.5 - Math.random()));
-            });
-        }
-
-        const workingPool = [...pool];
-        round.pairings = [];
-        let table = 1;
-        while (workingPool.length > 0) {
-            const a = workingPool.shift();
-            const b = workingPool.shift() || null;
-            round.pairings.push({
-                id: crypto.randomUUID(), table: table++, aId: a.id, bId: b ? b.id : null,
-                result: { outcome: b ? "NONE" : "BYE", a: {}, b: {} }
-            });
-        }
-        
-        // Auto-start timer on generate
-        const mins = parseFloat(document.getElementById("timerInput").value) || 150;
-        startTimer(mins);
-        renderAll();
-    };
-
-    document.getElementById("btnSaveResults").onclick = () => {
-        const round = state.rounds.find(r => r.id === state.activeRoundId);
-        if (!round) return;
-        
-        document.querySelectorAll(".pairing-row").forEach(row => {
-            const match = round.pairings.find(m => m.id === row.dataset.matchId);
-            if (match) {
-                const collect = (side) => ({
-                    primary: row.querySelector(`[data-side="${side}"][data-type="primary"]`)?.value || 0,
-                    secondary: row.querySelector(`[data-side="${side}"][data-type="secondary"]`)?.value || 0,
-                    paint: row.querySelector(`[data-side="${side}"][data-type="paint"]`)?.value || 0,
-                    extra: row.querySelector(`[data-side="${side}"][data-type="extra"]`)?.value || 0
-                });
-
-                match.result = {
-                    outcome: row.querySelector(".outcome-select").value,
-                    a: collect('a'),
-                    b: collect('b')
-                };
-            }
-        });
-        renderAll();
-        alert("Scores Saved.");
-    };
-
-    // Navigation & Global
-    document.querySelectorAll(".tab").forEach(tab => {
-        tab.onclick = () => {
-            document.querySelectorAll(".tab, .tab-content").forEach(el => el.classList.remove("active"));
-            tab.classList.add("active");
-            document.getElementById(`tab-${tab.dataset.tab}`).classList.add("active");
-        };
+    // Event Delegation for Save Buttons
+    document.querySelectorAll(".btn-save-match").forEach(btn => {
+        btn.onclick = () => saveMatchScore(btn.dataset.mid);
     });
+}
 
-    document.getElementById("btnReset").onclick = () => { if(confirm("Wipe all data?")) location.reload(); };
-});
+function saveMatchScore(matchId) {
+    const roundIndex = state.rounds.findIndex(r => r.id === state.activeRoundId);
+    const matchIndex = state.rounds[roundIndex].pairings.findIndex(m => m.id === matchId);
+    const row = document.querySelector(`.btn-save-match[data-mid="${matchId}"]`).closest('tr');
 
-window.removePlayer = (id) => { state.players = state.players.filter(p => p.id !== id); renderAll(); };
+    const getVal = (side, type) => row.querySelector(`[data-side="${side}"][data-type="${type}"]`)?.value || 0;
+
+    const result = {
+        outcome: row.querySelector(".outcome-select").value,
+        a: { primary: getVal('a', 'primary'), secondary: getVal('a', 'secondary'), paint: getVal('a', 'paint'), extra: getVal('a', 'extra') },
+        b: { primary: getVal('b', 'primary'), secondary: getVal('b', 'secondary'), paint: getVal('b', 'paint'), extra: getVal('b', 'extra') }
+    };
+
+    update(ref(db, `tournament/rounds/${roundIndex}/pairings/${matchIndex}/result`), result);
+    alert("Score Submitted to Cloud");
+}
+
+// --- ADMIN CONTROLS ---
+
+document.getElementById("btnAddPlayer").onclick = () => {
+    const name = document.getElementById("newPlayerName").value;
+    const faction = document.getElementById("newPlayerFaction").value;
+    if (!name) return;
+    const newId = crypto.randomUUID();
+    set(ref(db, 'tournament/players/' + newId), { id: newId, name, faction });
+};
+
+document.getElementById("btnGeneratePairings").onclick = () => {
+    if (!isAdmin) return;
+    const roundIndex = state.rounds.findIndex(r => r.id === state.activeRoundId);
+    let pool = [];
+
+    if (state.rounds.length === 1) {
+        pool = [...state.players].sort(() => 0.5 - Math.random());
+    } else {
+        const standings = computeStandings();
+        const brackets = {};
+        standings.forEach(p => {
+            if (!brackets[p.points]) brackets[p.points] = [];
+            brackets[p.points].push(p);
+        });
+        Object.keys(brackets).sort((a,b) => b-a).forEach(k => {
+            pool.push(...brackets[k].sort(() => 0.5 - Math.random()));
+        });
+    }
+
+    const pairings = [];
+    for (let i = 0; i < pool.length; i += 2) {
+        pairings.push({
+            id: crypto.randomUUID(), table: (i/2)+1, aId: pool[i].id, bId: pool[i+1]?.id || null,
+            result: { outcome: pool[i+1] ? "NONE" : "BYE", a: {}, b: {} }
+        });
+    }
+    update(ref(db, `tournament/rounds/${roundIndex}`), { pairings });
+};
+
+// ... [Include standard tab logic and player removal helpers here]
