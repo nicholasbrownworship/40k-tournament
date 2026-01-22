@@ -262,3 +262,30 @@ function seedAndBuildCutRound(state, round, cutSize) {
   round.pairings = pairs.map((p, i) => ({ id: uid(), table: i + 1, aId: p[0], bId: p[1], result: { outcome: "NONE" } }));
   return round;
 }
+
+/**
+ * Updates a specific match result within a round
+ */
+export function setMatchResult(state, roundId, matchId, outcome, aVP = 0, bVP = 0) {
+    const round = getRound(state, roundId);
+    if (!round || round.locked) return;
+
+    const match = round.pairings.find(m => m.id === matchId);
+    if (!match) return;
+
+    match.result = {
+        outcome: outcome.toUpperCase(), // "A", "B", "D", "BYE", or "NONE"
+        aVP: parseInt(aVP) || 0,
+        bVP: parseInt(bVP) || 0
+    };
+}
+
+/**
+ * Prevents further changes to a round's results
+ */
+export function lockRound(state, roundId, lockState = true) {
+    const round = getRound(state, roundId);
+    if (round) {
+        round.locked = lockState;
+    }
+}
